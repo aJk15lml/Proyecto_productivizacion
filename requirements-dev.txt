@@ -1,0 +1,9 @@
+# Dependencias de desarrollo (notebooks, exploración).
+# NO se instalan en producción para no inflar el contenedor del servidor.
+#
+# Uso local:
+#   pip install -r requirements.txt
+#   pip install -r requirements-dev.txt
+
+jupyterlab==4.2.0
+ipykernel==6.29.4

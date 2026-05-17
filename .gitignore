@@ -1,0 +1,32 @@
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Datos crudos (pueden ser grandes)
+data/raw/
+data/external/
+
+# Modelos pesados (decidir si subir o no según tamaño)
+# models/*.pkl
+
+# Cachés Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Notebooks: outputs limpios
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Variables de entorno
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
