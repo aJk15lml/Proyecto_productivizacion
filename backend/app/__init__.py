@@ -15,7 +15,7 @@ Rutas:
 import os
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 from .predictor import (
@@ -35,6 +35,11 @@ CORS(app)
 # ---------------------------------------------------------------------------
 # Rutas
 # ---------------------------------------------------------------------------
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return render_template("index.html")
 
 
 @app.route("/health", methods=["GET"])

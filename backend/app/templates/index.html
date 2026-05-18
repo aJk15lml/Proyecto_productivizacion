@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devi - Predicción de Aglomeración Metro Londres</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+  .container { max-width: 700px; width: 100%; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  h1 { font-size: 24px; margin-bottom: 4px; color: #1a1a2e; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 4px; }
+  select, input { width: 100%; padding: 10px 12px; border: 1.5px solid #d0d5dd; border-radius: 8px; font-size: 14px; background: white; }
+  select:focus, input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .btn { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  .btn:hover { background: #1d4ed8; }
+  .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+  .loading { text-align: center; padding: 20px; color: #666; display: none; }
+  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
+  .result.Bajo { background: #d1fae5; border: 1px solid #6ee7b7; }
+  .result.Medio { background: #fef3c7; border: 1px solid #fcd34d; }
+  .result.Alto { background: #fed7aa; border: 1px solid #fb923c; }
+  .result.Saturado { background: #fecaca; border: 1px solid #f87171; }
+  .result h2 { font-size: 18px; margin-bottom: 8px; }
+  .result .stat { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  .result .stat:last-child { border: none; }
+  .result .stat .label { color: #555; }
+  .result .stat .value { font-weight: 600; }
+  .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 700; }
+  .badge.Bajo { background: #6ee7b7; color: #064e3b; }
+  .badge.Medio { background: #fcd34d; color: #78350f; }
+  .badge.Alto { background: #fb923c; color: #7c2d12; }
+  .badge.Saturado { background: #f87171; color: #7f1d1d; }
+  .error { margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; font-size: 14px; display: none; }
+  .search-loading { font-size: 13px; color: #888; padding: 4px 0; display: none; }
+  .footer { margin-top: 24px; text-align: center; font-size: 12px; color: #999; }
+  .footer a { color: #2563eb; text-decoration: none; }
+  @media (max-width: 480px) { .container { padding: 20px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🚇 Devi</h1>
+  <p class="subtitle">Predicción de aglomeración en estaciones del Metro de Londres</p>
+
+  <div class="form-group">
+    <label for="station">Estación</label>
+    <select id="station"><option value="">Cargando estaciones...</option></select>
+    <div class="search-loading" id="station-loading">Cargando listado de estaciones...</div>
+  </div>
+
+  <div class="form-group">
+    <label for="day">Día</label>
+    <select id="day">
+      <option value="MON">Lunes (MON)</option>
+      <option value="TWT" selected>Martes–Jueves (TWT)</option>
+      <option value="FRI">Viernes (FRI)</option>
+      <option value="SAT">Sábado (SAT)</option>
+      <option value="SUN">Domingo (SUN)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="hour">Hora</label>
+    <select id="hour"></select>
+  </div>
+
+  <button class="btn" id="predict-btn" disabled>Consultar aglomeración</button>
+
+  <div class="loading" id="loading"><span class="spinner"></span> Calculando predicción...</div>
+  <div class="error" id="error"></div>
+  <div class="result" id="result"></div>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/tu-repo" target="_blank">GitHub</a> &middot;
+  <a href="/health">Health</a> &middot;
+  <a href="/stations">Stations API</a>
+</div>
+
+<script>
+const BASE = window.location.origin;
+let stations = [];
+
+for (let h = 0; h < 24; h++) {
+  const o = document.createElement("option");
+  o.value = h;
+  o.textContent = String(h).padStart(2, "0") + ":00";
+  document.getElementById("hour").appendChild(o);
+}
+document.getElementById("hour").value = new Date().getHours();
+
+async function loadStations() {
+  const sel = document.getElementById("station");
+  const loadEl = document.getElementById("station-loading");
+  loadEl.style.display = "block";
+  try {
+    const r = await fetch(BASE + "/stations");
+    const data = await r.json();
+    stations = data.estaciones || [];
+    sel.innerHTML = '<option value="">Selecciona una estación</option>';
+    stations.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+    stations.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.NLC;
+      o.textContent = s.nombre + (s.zona ? " (zona " + s.zona + ")" : "");
+      sel.appendChild(o);
+    });
+    document.getElementById("predict-btn").disabled = false;
+  } catch (e) {
+    sel.innerHTML = '<option value="">Error al cargar estaciones</option>';
+  }
+  loadEl.style.display = "none";
+}
+
+document.getElementById("predict-btn").addEventListener("click", async () => {
+  const nlc = document.getElementById("station").value;
+  const dia = document.getElementById("day").value;
+  const hora = document.getElementById("hour").value;
+  if (!nlc) { showError("Selecciona una estación"); return; }
+
+  const stationName = stations.find(s => s.NLC == nlc)?.nombre || nlc;
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("error").style.display = "none";
+  document.getElementById("result").style.display = "none";
+
+  try {
+    const r = await fetch(BASE + "/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora);
+    const data = await r.json();
+    document.getElementById("loading").style.display = "none";
+
+    if (data.error) { showError(data.error); return; }
+
+    const nivel = data.nivel_aglomeracion || "Desconocido";
+    const res = document.getElementById("result");
+    res.className = "result " + nivel;
+    res.style.display = "block";
+    res.innerHTML = `
+      <h2><span class="badge ${nivel}">${nivel}</span></h2>
+      <div class="stat"><span class="label">Estación</span><span class="value">${data.estacion}</span></div>
+      <div class="stat"><span class="label">Día</span><span class="value">${data.dia}</span></div>
+      <div class="stat"><span class="label">Hora</span><span class="value">${String(data.hora).padStart(2,"0")}:00</span></div>
+      <div class="stat"><span class="label">Pasajeros estimados (15 min)</span><span class="value">${data.pasajeros_15min_estimados}</span></div>
+      <div class="stat"><span class="label">NLC</span><span class="value">${data.NLC}</span></div>
+      <div class="stat"><span class="label">Coordenadas</span><span class="value">${data.latitud?.toFixed(4)}, ${data.longitud?.toFixed(4)}</span></div>
+    `;
+  } catch (e) {
+    document.getElementById("loading").style.display = "none";
+    showError("Error de conexión: " + e.message);
+  }
+});
+
+function showError(msg) {
+  const el = document.getElementById("error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+loadStations();
+</script>
+</body>
+</html>
