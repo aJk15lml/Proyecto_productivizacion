@@ -26,6 +26,11 @@ __pycache__/
 
 # Variables de entorno
 .env
+backend/.env
+
+# Backend virtual env
+backend/venv/
+backend/.venv/
 
 # Sistema
 .DS_Store

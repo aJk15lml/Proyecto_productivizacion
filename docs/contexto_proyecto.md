@@ -43,7 +43,7 @@ La aplicación debe estar **activa durante la presentación**, con un vídeo gra
 
 ## Equipo
 
-Juan Antonio Moreno y Pablo. Dos integrantes.
+Juan Antonio Moreno y Pablo da Cunha. Dos integrantes.
 
 ---
 
