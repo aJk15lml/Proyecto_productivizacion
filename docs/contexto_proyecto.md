@@ -338,3 +338,119 @@ El proyecto se construye siguiendo el principio **"MVP primero, escalar por nive
 - **gunicorn**: servidor WSGI de producción para aplicaciones Python como Flask.
 - **Render**: plataforma de despliegue PaaS con plan gratuito, conexión directa con GitHub.
 - **AWS EC2**: servicio de máquinas virtuales de Amazon Web Services.
+
+
+---
+
+## Estado del entrenamiento (mayo 2026)
+
+El script `src/entrenamiento.py` ha producido la primera versión del modelo. Resultados de validación temporal (train = 2023, test = 2024):
+
+### Métricas en test 2024 (estratificadas)
+
+| Slice | n | MAE | RMSE | R² |
+|-------|---|------|------|------|
+| **Global** | 207.360 | 15.04 | 41.95 | 0.965 |
+| **Diurno / operacional** (sin is_night) | 164.160 | 18.36 | 46.65 | **0.963** |
+| **Nocturno** (is_night) | 43.200 | 2.45 | 13.35 | 0.802 |
+
+**Métrica de referencia para defensa:** R² diurno = 0.963, MAE diurno = 18 pasajeros/15-min.
+
+> Las métricas globales están infladas por la trivialidad nocturna (60% de los ceros). Se reportan los tres slices para ser transparentes.
+
+### Importancia de features
+
+1. `hour` — 0.49 (no-linealidades en la hora, dominante).
+2. `is_night` — 0.18.
+3. `NLC` — 0.09 (identifica implícitamente la estación; subsume `num_lines`, `Latitude`, `Longitude`).
+4. `is_peak` — 0.06.
+5. `InnerFareZone` — 0.05.
+6. Resto < 0.04.
+
+### Detalles técnicos del entrenamiento
+
+- **Target:** `log1p(passengers)` (predicción en log; deshace con `expm1` al servir).
+- **Modelo:** XGBoostRegressor, `n_estimators=800` con early stopping (best_iteration = 305).
+- **Hiperparámetros:** `learning_rate=0.08`, `max_depth=8`, `min_child_weight=5`, `subsample=0.85`, `colsample_bytree=0.85`, `tree_method=hist`, `enable_categorical=True`.
+- **Categóricas nativas de XGBoost:** `NLC` (432 categorías) y `day_type` (5 categorías).
+- **Tiempo de entrenamiento:** 3.9 segundos en portátil normal.
+- **Features finales (12):** `NLC`, `day_type`, `hour`, `num_lines`, `num_modes`, `tiene_modo_tfl_explicito`, `InnerFareZone`, `OuterFareZone`, `Latitude`, `Longitude`, `is_peak`, `is_night`.
+
+### Artefactos generados
+
+- `models/xgboost_v1.pkl` — modelo de validación (entrenado solo con 2023). Se usa para reportar métricas.
+- `models/xgboost_prod.pkl` — **modelo de producción** (re-entrenado con 2023+2024). **Este es el que carga la API.**
+- `docs/metricas_v1.json` — métricas estratificadas + hiperparámetros + importancia, listas para citar.
+
+### Cómo cargar el modelo desde la API
+
+```python
+import joblib
+import numpy as np
+import pandas as pd
+
+blob = joblib.load("models/xgboost_prod.pkl")
+modelo = blob["model"]
+features = blob["features"]                   # lista ordenada de 12 nombres
+day_types = blob["day_type_categories"]       # ["MON","TWT","FRI","SAT","SUN"]
+
+# Construir el DataFrame de entrada con las columnas correctas y los dtypes correctos
+fila = pd.DataFrame([{
+    "NLC": 502,              # int -> después cast a category
+    "day_type": "TWT",        # string
+    "hour": 18,
+    "num_lines": 2,
+    "num_modes": 1,
+    "tiene_modo_tfl_explicito": 1,
+    "InnerFareZone": 1,
+    "OuterFareZone": 1,
+    "Latitude": 51.5142,
+    "Longitude": -0.0757,
+    "is_peak": 1,
+    "is_night": 0,
+}])
+fila["NLC"] = fila["NLC"].astype("category")
+fila["day_type"] = pd.Categorical(fila["day_type"], categories=day_types)
+
+# Predecir y deshacer el log
+y_pred_log = modelo.predict(fila[features])[0]
+pasajeros = float(np.clip(np.expm1(y_pred_log), 0, None))
+```
+
+### Caveats técnicos a conocer
+
+- El MAPE reportado en `metricas_v1.json` está **inflado** porque NUMBAT tiene valores como `0.001` pasajeros que rompen el cálculo. No usar ese campo en la defensa; usar MAE/RMSE/R².
+- El modelo asume que la entrada **tiene exactamente las 12 features con los dtypes correctos** (categóricas como `category`). Si la API pasa `string` simple en lugar de `category`, XGBoost se queja. Por eso el bloque de código de arriba castea antes de predecir.
+
+---
+
+## Para Pablo: siguientes pasos del despliegue
+
+Con el modelo en `models/xgboost_prod.pkl`, lo que falta para terminar el Nivel 1 es **tu parte**:
+
+1. **Construir `app.py`** con las 4 rutas obligatorias:
+   - `GET /health` — devuelve `{"status": "ok", "model_loaded": True}` para confirmar que el modelo se cargó.
+   - `GET /crowding/<estacion>` — parámetro en el **path**. Recibe el nombre de la estación, busca su NLC y features estructurales en una tabla de lookup (que podemos generar desde el parquet), y predice para "ahora mismo".
+   - `GET /crowding?estacion=...&dia=...&hora=...` — parámetros en la **query string**, con control fino.
+   - `POST /crowding` — recibe JSON con varias estaciones y condiciones (`{"estacion": "...", "dia": "TWT", "hora": 18}` o un array de ellas), devuelve predicciones.
+
+2. **Crear `data/processed/lookup_estaciones.parquet`** (o cargarlo a memoria al arrancar la app): tabla con NLC, nombre, num_lines, num_modes, fare zones, lat/lon, ASC. Es el "diccionario" que la API consulta cuando el usuario pide una estación por nombre.
+
+3. **Mapear `passengers` → etiqueta de aglomeración** (Bajo / Medio / Alto / Saturado). Recomendación: percentiles por estación (cada estación tiene su propia escala; Oxford Circus a 1000 pasajeros está poco saturada, Acton Town a 1000 estaría reventando).
+
+4. **Validación de inputs y manejo de errores:** 400 si la estación no existe o el día no es válido; 500 si el modelo falla con un mensaje claro.
+
+5. **Probar en local** con Postman / curl. Guardar ejemplos de petición/respuesta para `docs/ejemplos_api.md`.
+
+6. **Desplegar en Render**: conectar el repo de GitHub, configurar el `Procfile` (`web: gunicorn app:app`), variables de entorno si hace falta. Tras el despliegue, probar la URL pública.
+
+7. **Vídeo de respaldo** grabado de la demo en local en cuanto el despliegue esté vivo.
+
+### Dependencias para el despliegue
+
+`requirements.txt` ya incluye todo lo necesario (`flask`, `gunicorn`, `xgboost`, `pandas`, `joblib`, `pyarrow`). Render instala desde ahí automáticamente.
+
+### Tamaño del bundle
+
+- `models/xgboost_prod.pkl`: estimado < 10 MB.
+- Total del repo sin datos crudos: < 15 MB. Cabe holgadamente en el free tier de Render.

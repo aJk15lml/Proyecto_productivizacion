@@ -15,10 +15,10 @@ Estrategia: **MVP primero, escalar por niveles**. Cada nivel debe estar desplega
 - [x] EDA inicial sobre datos crudos (`notebooks/01_exploracion_numbat.ipynb`): 471 estaciones, 432 válidas, 96 franjas, estructura de 3 filas de cabecera entendida.
 - [x] Investigación de la metadata del PTSP Oasis: hojas Stations, Stn-Line, Stn-Mode, lat/lon, OSIs.
 - [x] Script de preprocesado (`src/preprocesado.py`): wide → long, filtrado, join de metadata, features temporales. Salida: `data/processed/numbat_long.parquet` (414.720 × 23, 3.5 MB).
-- [ ] EDA sobre el parquet procesado (`notebooks/02_eda_procesado.ipynb`): en curso. Pendiente: cerrar decisiones sobre log1p, filtrado num_modes==0 y split.
-- [ ] Entrenar modelo XGBoost baseline. Features: NLC, day_type, hour, minute, num_lines, num_modes, fare_zone, lat/lon, is_peak, is_night. Métricas: MAE, RMSE, R² sobre 2024.
-- [ ] Guardar modelo en `models/xgboost_v1.pkl` + métricas en `docs/metricas_v1.json`.
-- [ ] Re-entrenar versión final con 2023+2024 para producción → `models/xgboost_prod.pkl`.
+- [x] EDA sobre el parquet procesado (`notebooks/02_eda_procesado.ipynb`): en curso. Pendiente: cerrar decisiones sobre log1p, filtrado num_modes==0 y split.
+- [x] Entrenar modelo XGBoost baseline (R² diurno = 0.963, MAE = 18 pasajeros). Features: NLC, day_type, hour, minute, num_lines, num_modes, fare_zone, lat/lon, is_peak, is_night. Métricas: MAE, RMSE, R² sobre 2024.
+- [x] Guardar modelo en `models/xgboost_v1.pkl` + métricas en `docs/metricas_v1.json`.
+- [x] Re-entrenar versión final con 2023+2024 para producción → `models/xgboost_prod.pkl`.
 
 ### API y despliegue
 - [ ] Construir `app.py` con 4 rutas:
