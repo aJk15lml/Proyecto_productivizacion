@@ -7,7 +7,7 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-  .container { max-width: 700px; width: 100%; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .container { max-width: 750px; width: 100%; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
   h1 { font-size: 24px; margin-bottom: 4px; color: #1a1a2e; }
   .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
   .form-group { margin-bottom: 16px; }
@@ -17,10 +17,15 @@
   .btn { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
   .btn:hover { background: #1d4ed8; }
   .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+  .btn-outline { background: transparent; border: 1.5px solid #2563eb; color: #2563eb; }
+  .btn-outline:hover { background: #eff6ff; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; width: auto; margin: 3px 4px 3px 0; }
+  .btn-sm2 { padding: 6px 14px; font-size: 12px; width: auto; margin: 3px 4px 3px 0; background: #f3f4f6; color: #333; border: 1px solid #d0d5dd; }
+  .btn-sm2:hover { background: #e5e7eb; }
   .loading { text-align: center; padding: 20px; color: #666; display: none; }
   .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .result { margin-top: 20px; padding: 20px; border-radius: 12px; display: none; }
+  .result { margin-top: 16px; padding: 20px; border-radius: 12px; display: none; }
   .result.Bajo { background: #d1fae5; border: 1px solid #6ee7b7; }
   .result.Medio { background: #fef3c7; border: 1px solid #fcd34d; }
   .result.Alto { background: #fed7aa; border: 1px solid #fb923c; }
@@ -37,7 +42,15 @@
   .badge.Saturado { background: #f87171; color: #7f1d1d; }
   .error { margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; font-size: 14px; display: none; }
   .search-loading { font-size: 13px; color: #888; padding: 4px 0; display: none; }
-  .footer { margin-top: 24px; text-align: center; font-size: 12px; color: #999; }
+  .api-playground { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+  .api-playground h3 { font-size: 15px; color: #1a1a2e; margin-bottom: 12px; }
+  .endpoint-group { margin-bottom: 14px; }
+  .endpoint-group .label { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
+  .endpoint-group .label .method { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-right: 4px; }
+  .method.get { background: #dbeafe; color: #1d4ed8; }
+  .method.post { background: #d1fae5; color: #047857; }
+  .json-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
+  .footer { margin-top: 28px; text-align: center; font-size: 12px; color: #999; }
   .footer a { color: #2563eb; text-decoration: none; }
   @media (max-width: 480px) { .container { padding: 20px; } }
 </style>
@@ -74,12 +87,54 @@
   <div class="loading" id="loading"><span class="spinner"></span> Calculando predicción...</div>
   <div class="error" id="error"></div>
   <div class="result" id="result"></div>
+
+  <div class="api-playground">
+    <h3>API Playground</h3>
+
+    <div class="endpoint-group">
+      <span class="label"><span class="method get">GET</span> /health</span>
+      <div>
+        <button class="btn-sm2" onclick="window.open('/health','_blank')">/health</button>
+        <button class="btn-sm2" onclick="window.open('/health/api','_blank')">/health/api</button>
+        <button class="btn-sm2" onclick="window.open('/health/modelo','_blank')">/health/modelo</button>
+        <button class="btn-sm2" onclick="window.open('/health/database','_blank')">/health/database</button>
+      </div>
+    </div>
+
+    <div class="endpoint-group">
+      <span class="label"><span class="method get">GET</span> /stations</span>
+      <div>
+        <button class="btn-sm2" onclick="window.open('/stations','_blank')">/stations</button>
+        <button class="btn-sm2" id="station-detail-btn" onclick="openStationDetail()">/stations/{NLC}</button>
+      </div>
+    </div>
+
+    <div class="endpoint-group">
+      <span class="label"><span class="method get">GET</span> /crowding</span>
+      <div>
+        <button class="btn-sm2" onclick="openCrowdingQuery()">/crowding?estacion=...&amp;dia=...&amp;hora=...</button>
+        <button class="btn-sm2" onclick="openCrowdingPath()">/crowding/{nombre}</button>
+      </div>
+    </div>
+
+    <div class="endpoint-group">
+      <span class="label"><span class="method post">POST</span> /crowding</span>
+      <div class="json-box" id="post-body">{
+  "estaciones": [
+    {"estacion": "Oxford Circus", "dia": "TWT", "hora": 8},
+    {"estacion": "Waterloo", "dia": "FRI", "hora": 18}
+  ]
+}</div>
+      <div>
+        <button class="btn-sm2" onclick="sendPostCrowding()">Enviar POST</button>
+        <button class="btn-sm2" onclick="navigator.clipboard.writeText(document.getElementById('post-body').textContent);alert('Copiado')">Copiar JSON</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="footer">
-  <a href="https://github.com/tu-repo" target="_blank">GitHub</a> &middot;
-  <a href="/health">Health</a> &middot;
-  <a href="/stations">Stations API</a>
+  <a href="https://github.com/tu-repo" target="_blank">GitHub</a>
 </div>
 
 <script>
@@ -170,6 +225,54 @@ function showError(msg) {
   const el = document.getElementById("error");
   el.innerHTML = msg + ' <button onclick="document.getElementById(\'predict-btn\').click()" style="margin-left:8px;padding:4px 12px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;">Reintentar</button>';
   el.style.display = "block";
+}
+
+function openCrowdingQuery() {
+  const nlc = document.getElementById("station").value;
+  const dia = document.getElementById("day").value;
+  const hora = document.getElementById("hour").value;
+  const stationName = stations.find(s => s.NLC == nlc)?.nombre || "Oxford%20Circus";
+  window.open("/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora, "_blank");
+}
+
+function openCrowdingPath() {
+  const nlc = document.getElementById("station").value;
+  const stationName = stations.find(s => s.NLC == nlc)?.nombre || "Oxford%20Circus";
+  window.open("/crowding/" + encodeURIComponent(stationName), "_blank");
+}
+
+function openStationDetail() {
+  const nlc = document.getElementById("station").value;
+  if (!nlc) { alert("Selecciona una estación primero"); return; }
+  window.open("/stations/" + nlc, "_blank");
+}
+
+async function sendPostCrowding() {
+  const bodyEl = document.getElementById("post-body");
+  let payload;
+  try {
+    payload = JSON.parse(bodyEl.textContent);
+  } catch {
+    alert("JSON inválido en el recuadro");
+    return;
+  }
+  document.getElementById("loading").style.display = "block";
+  try {
+    const r = await fetch(BASE + "/crowding", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    document.getElementById("loading").style.display = "none";
+    const res = document.getElementById("result");
+    res.style.display = "block";
+    res.className = "result";
+    res.innerHTML = "<h2>POST /crowding</h2><div class='json-box'>" + JSON.stringify(data, null, 2) + "</div>";
+  } catch (e) {
+    document.getElementById("loading").style.display = "none";
+    showError("Error POST: " + e.message);
+  }
 }
 
 loadStations();
