@@ -1,7 +1,7 @@
 # Contexto del Proyecto — Predicción de Aglomeración en el Metro de Londres
 
 > Documento fuente para NotebookLM y otros asistentes.
-> Última actualización: mayo de 2026.
+> Última actualización: 18 de mayo de 2026.
 
 ---
 
@@ -71,33 +71,112 @@ La aglomeración, en cambio, **no la predicen esas herramientas**. TfL solo expo
 
 ## Dataset principal: NUMBAT
 
-NUMBAT (*Network Usage Model Briefing And Tracking*) es el modelo de uso de red publicado por Transport for London (TfL) bajo licencia abierta.
+NUMBAT (*Network Usage Model Briefing And Tracking*) es el modelo de uso de red publicado por Transport for London (TfL) bajo licencia abierta. Cubre **London Underground + London Overground + DLR + Elizabeth Line** (Tramlink aparece listado pero no se mide).
 
 ### Características
 
 - **URL del portal:** https://crowding.data.tfl.gov.uk/
 - **Documentación oficial (PDF):** https://crowding.data.tfl.gov.uk/NUMBAT/Intro_to_NUMBAT.pdf
-- **Granularidad temporal:** 15 minutos a lo largo de un día tipo.
-- **Granularidad espacial:** estación individual del Metro (Tube), Overground, DLR y Elizabeth Line.
-- **Distinción de día:** *weekday*, *Saturday* y *Sunday*.
-- **Años disponibles:** desde 2017 hasta 2024 (snapshots por temporada).
-- **Formato:** archivos Excel (`.xlsx`) con hojas separadas para Entry (entradas), Exit (salidas), OD (matriz origen-destino) y Link (flujos por tramo de línea).
+- **Granularidad temporal:** 15 minutos a lo largo de un día tipo (`HHMM-HHMM`, p. ej. `0500-0515`).
+- **Granularidad espacial:** estación individual.
+- **Tipos de día publicados:** varían con el año.
+  - 2017: `MTT` (Mon-Thu Typical), `SAT`, `SUN` — 3 categorías.
+  - 2019: `MTT`, `FRI`, `SAT`, `SUN` — 4 categorías (FRI separado).
+  - 2023+: `MON`, `TWT` (Tue-Wed-Thu), `FRI`, `SAT`, `SUN` — **5 categorías**, separando el lunes post-COVID.
+- **Años disponibles:** 2017 a 2024 (snapshots de otoño).
+- **Formato:** archivos Excel (`.xlsx`), cada uno con **10 hojas internas**: `_Cover`, `LineLookUp`, `Link_Loads`, `Link_Frequencies`, `Line_Boarders`, `Station_Flows`, `Station_Entries`, `Station_Exits`, `Station_Boarders`, `Station_Alighters`.
 - **Acceso:** descarga HTTP directa, sin necesidad de API key, registro o scraping.
 - **Licencia:** TfL Open Data Licence, compatible con la UK Open Government Licence.
 
+### Hoja utilizada: `Station_Entries`
+
+De las 10 hojas, usamos `Station_Entries`, que da el número de pasajeros que **entran** por la puerta de cada estación en cada franja de 15 minutos. La diferencia con `Station_Boarders` es importante: *boarders* incluye también a quienes ya estaban dentro y cambian de línea; *entries* mide solo entradas desde la calle, que es la mejor señal para "aglomeración en la estación" en el MVP.
+
+### Estructura técnica del archivo
+
+- **Tres filas de cabecera apiladas.** La fila 0 trae etiquetas-paraguas (`Station Entries`, `hour (hr)`), la fila 1 sub-etiquetas (hora 5..28, índice qhr 21..116), y la **fila 2** contiene los **nombres reales** de columna. Hay que leer el Excel con `header=2`.
+- **Columnas reales** (107 en total): `NLC`, `ASC`, `Station`, `Fare Zone`, `Total`, `Early`, `AM Peak`, `Midday`, `PM Peak`, `Evening`, `Late`, más las **96 franjas** de 15 minutos (`0500-0515`, `0515-0530`, …, `0445-0500`, cubriendo el ciclo operativo 05:00 → 04:59 del día siguiente).
+- **471 filas por archivo** (todas las estaciones de la red de raíles TfL).
+- **39 filas todas-cero** por archivo: estaciones de Tramlink u otras no medidas en NUMBAT. Se filtran antes de entrenar (`Total > 0`), dejando **432 estaciones válidas**.
+- **Valores decimales** (no enteros) porque NUMBAT es un *modelo reconciliado* de día tipo, no un conteo crudo. Reconcilia Oyster, contactless, validaciones de torniquete y encuestas. Por ese motivo, además, días afectados por disrupciones o eventos (huelgas, fallos, partidos) **están excluidos** del dataset por TfL antes de publicarlo.
+
 ### Naturaleza del dato — importante
 
-NUMBAT **no representa observaciones diarias crudas**: es un *día tipo reconciliado* construido a partir de fuentes múltiples (recuentos manuales, datos de Oyster, validaciones contactless, modelos internos). Esto es una **ventaja** para entrenar un modelo (datos limpios, sin huecos, sin valores atípicos por incidencias puntuales) y una **limitación** si se quisiera capturar variabilidad real día a día. Para el alcance de este proyecto, la ventaja pesa más.
+NUMBAT **no representa observaciones diarias crudas**: es un *día tipo reconciliado* construido a partir de fuentes múltiples. Esto es una **ventaja** para entrenar un modelo (datos limpios, sin huecos, sin valores atípicos por incidencias puntuales) y una **limitación** si se quisiera capturar variabilidad real día a día. Para el alcance de este proyecto, la ventaja pesa más.
 
 ---
 
-## Datasets complementarios
+## Dataset de metadata: PTSP Oasis for NUMBAT definitions
 
-Se contempla el uso opcional de fuentes adicionales:
+Archivo descargado junto a NUMBAT 2024 (`data/raw/2024/PTSP Oasis for NUMBAT definitions.xlsx`, 6.2 MB). Es el **diccionario oficial** del dataset y nos da el contexto estructural de cada estación que no está en los archivos NUMBAT principales. Tiene 24 hojas; usamos tres:
 
-- **Station Entry & Exit annual figures (2007–2024):** publicadas por TfL y London Datastore. Sirven como *feature de escala* del volumen anual de cada estación para normalizar la predicción.
-- **TfL Unified API — endpoint `/Crowding/{NaptanId}/Live`:** datos casi en tiempo real. Útil **únicamente para la demo** (comparar predicción del modelo frente a estado real durante la presentación). Requiere registro gratuito con `app_id` y `app_key`.
-- **Open-Meteo (API de clima):** integración planificada para el Nivel 4 del proyecto. Permite añadir lluvia y temperatura como features que modulan la aglomeración. Sin API key.
+### Hoja `Stations` (970 estaciones)
+
+Catálogo maestro con metadata por estación, incluyendo:
+
+- `MasterNLC`, `MasterASC`, `UniqueStationName` — identificadores.
+- `InnerFareZone`, `OuterFareZone` — zonas tarifarias (1 = centro, 9 = extrarradio; algunas estaciones son frontera y aparecen como `2/3`, `3/4`, etc.).
+- `Latitude`, `Longitude` — **geolocalización exacta**, clave para el frontend con mapa (Nivel 3).
+- `FullyGated` — indica si la estación tiene torniquetes completos (importante para calidad del dato).
+- `Hub`, `Active`, `TfL` — flags adicionales.
+
+### Hoja `Stn-Line` (970 × 48)
+
+Matriz booleana **estación × línea**. Una columna por cada una de las 44 líneas catalogadas (Tube, Overground, DLR, EZL, Tram, National Rail…). Permite calcular `num_lines` como suma de columnas True para las líneas TfL.
+
+### Hoja `Stn-Mode` (970 × 11)
+
+Matriz booleana **estación × modo**. Permite calcular `num_modes` de forma análoga (cuántos modos TfL rail sirven la estación).
+
+### Otras hojas relevantes (no usadas en MVP)
+
+- `Modes` (9 modos catalogados), `Lines` (44 líneas), `OSIs` (161 *Out of Station Interchanges*, complejos de transbordo como Bank–Monument), `Stn-Naptan` (mapeo a NAPTAN ID nacional).
+
+### Detalle de calidad
+
+`Stn-Mode` tiene un duplicado conocido: NLC 866 (*West India Quay*) aparece dos veces. El script de preprocesado lo deduplica automáticamente para no inflar el join.
+
+---
+
+## Dataset procesado: `data/processed/numbat_long.parquet`
+
+Salida del pipeline `src/preprocesado.py`. Es el archivo de entrada del modelo.
+
+- **Filas:** 414.720 (= 432 estaciones × 96 franjas × 5 día-tipo × 2 años).
+- **Columnas:** 23.
+- **Tamaño:** 3.5 MB (parquet con compresión snappy, vs ~57 MB en CSV).
+- **Carga:** instantánea con `pd.read_parquet`.
+
+### Columnas del parquet
+
+| Columna | Tipo | Origen | Significado |
+|---------|------|--------|-------------|
+| `NLC` | int32 | NUMBAT | National Location Code (identificador numérico). |
+| `ASC` | str | NUMBAT | Código interno TfL (sufijo indica modo: `u`=Underground, `d`=DLR, `r`=Rail). |
+| `station_name_numbat` | str | NUMBAT | Nombre de estación según NUMBAT. |
+| `fare_zone_str` | str | NUMBAT | Zona tarifaria como string (`"1"`, `"2"`, `"2/3"`...). |
+| `quarter_hour_slot` | str | NUMBAT | Franja de 15 min (`"0500-0515"`, ...). |
+| `passengers` | float | NUMBAT | **Target**: pasajeros entrando en esa franja. |
+| `year` | int16 | derivado | 2023 o 2024. |
+| `day_type` | str | derivado | MON / TWT / FRI / SAT / SUN. |
+| `UniqueStationName` | str | PTSP Oasis | Nombre canónico de estación. |
+| `InnerFareZone`, `OuterFareZone` | int | PTSP Oasis | Zonas numéricas limpias. |
+| `FullyGated` | str | PTSP Oasis | Estación con torniquetes completos. |
+| `Hub`, `Active`, `TfL` | bool/str | PTSP Oasis | Flags de metadata. |
+| `Latitude`, `Longitude` | float | PTSP Oasis | Geolocalización. |
+| `num_lines` | int | derivado | Número de líneas TfL que cruzan la estación. |
+| `num_modes` | int | derivado | Número de modos TfL rail que sirven la estación. |
+| `hour`, `minute` | int8 | derivado | Hora y minuto del inicio de la franja. |
+| `is_peak` | bool | derivado | True si 07:00-09:30 ó 17:00-19:30 en día laborable (MON/TWT/FRI). |
+| `is_night` | bool | derivado | True si hour < 5 (horario de cierre del Metro). |
+
+---
+
+## Datasets adicionales (opcionales, no integrados aún)
+
+- **TfL Unified API — endpoint `/Crowding/{NaptanId}/Live`:** datos casi en tiempo real. Útil **solo para la demo** (comparar predicción del modelo frente a estado real durante la presentación). Requiere registro gratuito con `app_id` y `app_key`.
+- **Open-Meteo (API de clima):** integración planificada para el Nivel 4. Permite añadir lluvia y temperatura como features. Sin API key.
+- **NUMBAT 2017 y 2019:** descargados pero **fuera del pipeline de entrenamiento**. Se conservan para análisis comparativo pre/post-COVID en la presentación (cambio del patrón de aglomeración por el teletrabajo).
 
 ---
 
@@ -108,11 +187,12 @@ Se contempla el uso opcional de fuentes adicionales:
 | Lenguaje | Python 3.11+ |
 | API | Flask 3.x |
 | Servidor de producción | gunicorn |
-| Manipulación de datos | pandas, numpy |
+| Manipulación de datos | pandas, numpy, pyarrow |
 | Modelado | scikit-learn, XGBoost |
 | Serialización del modelo | joblib |
 | Cliente HTTP | requests |
 | Variables de entorno | python-dotenv |
+| Notebooks | jupyterlab, matplotlib, seaborn |
 | Control de versiones | Git + GitHub |
 | Despliegue principal | Render (plan gratuito) |
 | Despliegue opcional | AWS EC2 (con nginx + gunicorn + systemd) |
@@ -146,10 +226,36 @@ El modelo principal será **XGBoost** por su buen rendimiento sobre datos tabula
 
 ---
 
+## Estructura del repositorio
+
+```
+Proyecto_productivizacion/
+├── README.md
+├── requirements.txt          # Dependencias de producción
+├── requirements-dev.txt      # Dependencias de desarrollo (jupyter, etc.)
+├── data/
+│   ├── raw/                  # Excels de NUMBAT + definiciones (gitignored)
+│   └── processed/
+│       └── numbat_long.parquet   # Dataset listo para entrenar
+├── notebooks/
+│   ├── 01_exploracion_numbat.ipynb   # EDA inicial sobre datos crudos
+│   └── 02_eda_procesado.ipynb        # EDA sobre el parquet procesado
+├── src/
+│   ├── descarga.py           # Bajar Excels de NUMBAT
+│   └── preprocesado.py       # Wide → long + join metadata + features
+├── models/                   # Modelos entrenados (.pkl)
+├── app.py                    # Servidor Flask con las 4 rutas (pendiente)
+└── docs/
+    ├── contexto_proyecto.md  # Este documento
+    └── plan.md               # Plan por niveles con checkboxes
+```
+
+---
+
 ## Reparto del trabajo
 
 - **Juan Antonio** se encarga de la **API Flask** y del **despliegue**. Esta es la parte que el enunciado evalúa directamente y la más representativa del rol de productivización.
-- Un asistente IA (Claude) se encarga de la parte de **datos y modelo**: descarga, limpieza, exploración (EDA), feature engineering y entrenamiento. Produce el archivo `modelo.pkl` que el equipo integra en la API.
+- Un asistente IA (Claude) se encarga de la parte de **datos y modelo**: descarga, limpieza, exploración (EDA), feature engineering y entrenamiento. Produce el archivo `.pkl` del modelo que el equipo integra en la API.
 - Asistentes complementarios (ChatGPT, Perplexity, NotebookLM) se utilizan para **investigación puntual** y **decisiones técnicas concretas** (por ejemplo, qué años de NUMBAT seleccionar, cómo justificar decisiones de diseño, qué features añadir).
 
 ---
@@ -160,13 +266,13 @@ El proyecto se construye siguiendo el principio **"MVP primero, escalar por nive
 
 ### Niveles previstos
 
-**Nivel 1 — Base entregable (red de seguridad).** Descarga de datos NUMBAT, modelo XGBoost simple con features básicas (estación, día de semana, hora, mes), API Flask con las cuatro rutas, despliegue en Render. Hasta que esto no esté vivo en internet, no se toca nada más.
+**Nivel 1 — Base entregable (red de seguridad).** Datos NUMBAT descargados y procesados, modelo XGBoost baseline con features básicas, API Flask con las cuatro rutas, despliegue en Render. Hasta que esto no esté vivo en internet, no se toca nada más.
 
-**Nivel 2 — Pulido y métricas.** Enriquecimiento del modelo con más features (línea de metro, zona tarifaria, número de líneas que cruzan la estación), endpoint público con métricas de evaluación del modelo (MAE, RMSE, R²), mejor manejo de errores y validación de inputs.
+**Nivel 2 — Pulido y métricas.** Mejora del modelo con todas las features disponibles del parquet, endpoint público con métricas (MAE, RMSE, R²), validación robusta de inputs, manejo de errores claro.
 
-**Nivel 3 — Demo visual.** Página HTML servida en la raíz `/` con formulario interactivo, llamadas JavaScript a la propia API, visualización con Chart.js o un mini-mapa (Leaflet/Folium).
+**Nivel 3 — Demo visual.** Página HTML servida en la raíz `/` con formulario interactivo y mapa de Londres (Leaflet/Folium) coloreando estaciones por aglomeración predicha. Las coordenadas ya están en el parquet, listas.
 
-**Nivel 4 — Features avanzadas.** Integración del clima mediante Open-Meteo (lluvia, temperatura), lista de festivos del Reino Unido y eventos relevantes (partidos en Wembley, conciertos en O2 Arena), reentrenamiento con dataset enriquecido.
+**Nivel 4 — Features avanzadas.** Integración del clima mediante Open-Meteo (lluvia, temperatura), lista de festivos UK y eventos relevantes (Wembley, O2 Arena), reentrenamiento con dataset enriquecido.
 
 **Nivel 5 — Bonus tracks.** Despliegue alternativo en AWS EC2 con nginx + gunicorn + systemd, segundo modelo (LSTM con Keras) para comparar enfoques clásicos vs deep learning, dominio propio con HTTPS gestionado por Let's Encrypt, contenedorización con Docker.
 
@@ -180,22 +286,26 @@ El proyecto se construye siguiendo el principio **"MVP primero, escalar por nive
 4. **Tema elegido:** crowding en Metro de Londres.
 5. **Dataset elegido:** NUMBAT de TfL. Motivo: granularidad de quince minutos, por estación individual, sin API key, múltiples años.
 6. **Años a descargar:** 2017, 2019, 2023 y 2024. Se descartan 2020, 2021 y 2022 por distorsión COVID y recuperación parcial. Se omite 2018 por redundancia con 2017 y 2019.
-7. **Años para entrenamiento principal:** 2023 y 2024 (post-COVID estabilizados). Total de tipos de día: MON, TWT, FRI, SAT y SUN (los cinco que NUMBAT publica desde 2023).
-8. **Uso de 2017 y 2019:** validación de robustez del modelo y *narrativa de la presentación* (mostrar cómo el teletrabajo post-COVID ha alterado el patrón de aglomeración del Metro). No se usan en entrenamiento principal porque su taxonomía de días (MTT, FRI, SAT, SUN) es distinta a la post-2023 y mezclarlos contaminaría la señal.
+7. **Años para entrenamiento principal:** 2023 y 2024 (post-COVID estabilizados). Tipos de día: MON, TWT, FRI, SAT y SUN.
+8. **Uso de 2017 y 2019:** análisis comparativo pre/post-COVID para la narrativa de la presentación. No se usan en entrenamiento principal porque su taxonomía de días (MTT, FRI, SAT, SUN) es distinta a la post-2023 y mezclarlos contaminaría la señal.
 9. **Modelo elegido:** XGBoost para Nivel 1. LSTM se contempla solo como Nivel 5 opcional.
 10. **Despliegue inicial:** Render. Motivo: simplicidad y red de seguridad antes de aventuras con AWS.
 11. **Despliegue secundario:** AWS EC2 como upgrade opcional, no como única opción inicial.
 12. **Idioma del código y documentación:** español (variables, comentarios, README).
 13. **Variable objetivo del modelo:** regresión sobre número de pasajeros por franja de quince minutos. La discretización en niveles (Bajo/Medio/Alto/Saturado) se aplicará por encima en la respuesta de la API, no en el target del modelo.
+14. **Hoja de NUMBAT a usar:** `Station_Entries` (no `Station_Boarders`, porque queremos medir aglomeración en la estación, no en los andenes).
+15. **Filtrado de estaciones todas-cero:** se eliminan las 39 estaciones de Tramlink u otras no medidas (Total == 0). Quedan 432 estaciones válidas por archivo.
+16. **Dedup de metadata:** la hoja `Stn-Mode` del PTSP Oasis trae NLC 866 (West India Quay) duplicado; el script de preprocesado lo deduplica para no inflar el join.
 
 ---
 
 ## Decisiones pendientes
 
-- Si limitar el alcance al Metro (Tube) o incluir también Overground, DLR y Elizabeth Line.
-- Si entrenar un modelo único para todas las estaciones (con `station_id` como feature) o un modelo por estación.
-- Cómo manejar la nomenclatura de estaciones (NAPTAN ID vs nombre legible) para los endpoints.
-- Qué umbrales aplicar para mapear el número de pasajeros predicho a las etiquetas Bajo/Medio/Alto/Saturado en la respuesta de la API (probablemente percentiles por estación).
+- **¿Filtrar estaciones con `num_modes == 0`?** Son 121 estaciones que solo tienen modo National Rail (no TfL rail). NUMBAT sí las mide, pero la feature `num_modes` no las describe bien. Pendiente del EDA.
+- **¿Aplicar `log1p` al target?** La distribución de `passengers` tiene cola larga (max ≈ 5961, mediana ≈ 39). Pendiente de confirmar en el EDA si compensa el log.
+- **Split train/test:** entrenamiento con 2023 entero y test con 2024 entero (validación temporal) **o** pool 2023+2024 con split aleatorio (más datos pero sin test temporal). Pendiente del EDA: si los patrones 2023 vs 2024 son muy parecidos, ambos enfoques son similares; si difieren, el temporal es más informativo.
+- **Umbrales de discretización** Bajo/Medio/Alto/Saturado en la respuesta de la API (probablemente percentiles por estación).
+- **¿Modelo único o uno por estación?** En principio uno único con `NLC` como feature; XGBoost lo absorbe bien y es más simple de desplegar.
 
 ---
 
@@ -218,7 +328,11 @@ El proyecto se construye siguiendo el principio **"MVP primero, escalar por nive
 - **Query string**: parámetros que viajan tras `?` en la URL, por ejemplo `?nombre=ana&edad=30`.
 - **Body**: cuerpo de la petición, habitualmente JSON, enviado en peticiones POST.
 - **NUMBAT**: modelo de uso de red de TfL que estima flujos de pasajeros por estación y franja horaria de quince minutos.
+- **NLC**: *National Location Code*. Identificador numérico nacional de cada estación de raíles en Reino Unido.
+- **ASC**: código interno de TfL para cada estación (string corto, sufijo letra indica modo).
 - **NAPTAN ID**: identificador estándar nacional de paradas de transporte en Reino Unido.
+- **PTSP Oasis**: archivo de definiciones que acompaña a NUMBAT con metadata estructural.
+- **OSI**: *Out of Station Interchange*. Transbordo entre estaciones físicamente separadas pero vinculadas (Bank ↔ Monument).
 - **TfL**: Transport for London, organismo público responsable del transporte en Londres.
 - **MVP**: *Minimum Viable Product*, primera versión funcional y entregable de un producto.
 - **gunicorn**: servidor WSGI de producción para aplicaciones Python como Flask.
