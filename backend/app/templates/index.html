@@ -94,13 +94,24 @@ for (let h = 0; h < 24; h++) {
 }
 document.getElementById("hour").value = new Date().getHours();
 
+async function apiFetch(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55000);
+  const r = await fetch(BASE + url, { signal: controller.signal });
+  clearTimeout(timeout);
+  const ct = r.headers.get("content-type") || "";
+  if (!ct.includes("application/json") && !ct.includes("text/json")) {
+    throw new Error("El servidor no responde (posible cold start). Inténtalo de nuevo en unos segundos.");
+  }
+  return r.json();
+}
+
 async function loadStations() {
   const sel = document.getElementById("station");
   const loadEl = document.getElementById("station-loading");
   loadEl.style.display = "block";
   try {
-    const r = await fetch(BASE + "/stations");
-    const data = await r.json();
+    const data = await apiFetch("/stations");
     stations = data.estaciones || [];
     sel.innerHTML = '<option value="">Selecciona una estación</option>';
     stations.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
@@ -112,7 +123,7 @@ async function loadStations() {
     });
     document.getElementById("predict-btn").disabled = false;
   } catch (e) {
-    sel.innerHTML = '<option value="">Error al cargar estaciones</option>';
+    sel.innerHTML = '<option value="">' + e.message + '</option>';
   }
   loadEl.style.display = "none";
 }
@@ -129,8 +140,7 @@ document.getElementById("predict-btn").addEventListener("click", async () => {
   document.getElementById("result").style.display = "none";
 
   try {
-    const r = await fetch(BASE + "/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora);
-    const data = await r.json();
+    const data = await apiFetch("/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora);
     document.getElementById("loading").style.display = "none";
 
     if (data.error) { showError(data.error); return; }
@@ -150,13 +160,15 @@ document.getElementById("predict-btn").addEventListener("click", async () => {
     `;
   } catch (e) {
     document.getElementById("loading").style.display = "none";
-    showError("Error de conexión: " + e.message);
+    showError(e.message.includes("cold start")
+      ? "El servidor está arrancando (cold start). Espera unos segundos y pulsa \"Reintentar\"."
+      : "Error: " + e.message);
   }
 });
 
 function showError(msg) {
   const el = document.getElementById("error");
-  el.textContent = msg;
+  el.innerHTML = msg + ' <button onclick="document.getElementById(\'predict-btn\').click()" style="margin-left:8px;padding:4px 12px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;">Reintentar</button>';
   el.style.display = "block";
 }
 
