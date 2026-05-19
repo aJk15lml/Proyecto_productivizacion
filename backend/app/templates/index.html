@@ -7,21 +7,24 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-  .container { max-width: 750px; width: 100%; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .container { max-width: 800px; width: 100%; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
   h1 { font-size: 24px; margin-bottom: 4px; color: #1a1a2e; }
   .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
   .form-group { margin-bottom: 16px; }
   label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 4px; }
-  select, input { width: 100%; padding: 10px 12px; border: 1.5px solid #d0d5dd; border-radius: 8px; font-size: 14px; background: white; }
-  select:focus, input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  select, input[type="text"] { width: 100%; padding: 10px 12px; border: 1.5px solid #d0d5dd; border-radius: 8px; font-size: 14px; background: white; }
+  select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
   .btn { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
   .btn:hover { background: #1d4ed8; }
   .btn:disabled { background: #93c5fd; cursor: not-allowed; }
-  .btn-outline { background: transparent; border: 1.5px solid #2563eb; color: #2563eb; }
-  .btn-outline:hover { background: #eff6ff; }
-  .btn-sm { padding: 6px 14px; font-size: 12px; width: auto; margin: 3px 4px 3px 0; }
-  .btn-sm2 { padding: 6px 14px; font-size: 12px; width: auto; margin: 3px 4px 3px 0; background: #f3f4f6; color: #333; border: 1px solid #d0d5dd; }
-  .btn-sm2:hover { background: #e5e7eb; }
+  .btn-sm { padding: 8px 14px; font-size: 13px; font-weight: 600; width: auto; margin: 3px 4px 3px 0; background: #f3f4f6; color: #333; border: 1px solid #d0d5dd; border-radius: 6px; cursor: pointer; }
+  .btn-sm:hover { background: #e5e7eb; }
+  .btn-sm.primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .btn-sm.primary:hover { background: #1d4ed8; }
+  .btn-sm.danger { color: #dc2626; border-color: #fca5a5; }
+  .btn-sm.danger:hover { background: #fef2f2; }
+  .btn-sm.star { font-size: 18px; padding: 4px 12px; min-width: 48px; }
+  .btn-sm.star.active { background: #fef3c7; border-color: #f59e0b; color: #d97706; }
   .loading { text-align: center; padding: 20px; color: #666; display: none; }
   .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -35,28 +38,35 @@
   .result .stat:last-child { border: none; }
   .result .stat .label { color: #555; }
   .result .stat .value { font-weight: 600; }
-  .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 700; }
+  .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
   .badge.Bajo { background: #6ee7b7; color: #064e3b; }
   .badge.Medio { background: #fcd34d; color: #78350f; }
   .badge.Alto { background: #fb923c; color: #7c2d12; }
   .badge.Saturado { background: #f87171; color: #7f1d1d; }
   .error { margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; font-size: 14px; display: none; }
   .search-loading { font-size: 13px; color: #888; padding: 4px 0; display: none; }
-  .api-playground { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 20px; }
-  .api-playground h3 { font-size: 15px; color: #1a1a2e; margin-bottom: 12px; }
-  .endpoint-group { margin-bottom: 14px; }
-  .endpoint-group .label { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
-  .endpoint-group .label .method { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-right: 4px; }
-  .method.get { background: #dbeafe; color: #1d4ed8; }
-  .method.post { background: #d1fae5; color: #047857; }
-  .json-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
-  .footer { margin-top: 28px; text-align: center; font-size: 12px; color: #999; }
-  .footer a { color: #2563eb; text-decoration: none; }
-  .minute-group { display:flex; gap:3px; align-items:center; }
-  .minute-btn { padding:8px 0; min-width:44px; font-size:13px; font-weight:600; border:1.5px solid #d0d5dd; border-radius:6px; background:white; color:#555; cursor:pointer; transition:all 0.15s; }
+  .result-table { width:100%; border-collapse:collapse; margin-top:12px; font-size:13px; }
+  .result-table th { background:#f9fafb; text-align:left; padding:8px 10px; border-bottom:2px solid #e5e7eb; font-weight:600; }
+  .result-table td { padding:8px 10px; border-bottom:1px solid #e5e7eb; }
+  .result-table tr:last-child td { border-bottom:none; }
+  .result-table tr.least { background:#ecfdf5; font-weight:600; }
+  .result-table tr.least td { border-bottom-color:#6ee7b7; }
+  .star-icon { cursor:pointer; font-size:20px; user-select:none; }
+  .favorites-section { margin-top:16px; padding:12px 16px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb; }
+  .favorites-section h4 { font-size:13px; color:#555; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px; }
+  .fav-tag { display:inline-flex; align-items:center; gap:4px; padding:5px 10px; background:white; border:1px solid #d0d5dd; border-radius:6px; font-size:13px; margin:3px; cursor:pointer; }
+  .fav-tag:hover { border-color:#2563eb; }
+  .fav-tag .del { color:#999; font-size:14px; margin-left:4px; cursor:pointer; }
+  .fav-tag .del:hover { color:#dc2626; }
+  .hour-display { font-size:32px; font-weight:700; color:#1a1a2e; text-align:center; margin:8px 0 4px; }
+  .hour-display span.min { font-weight:400; color:#888; font-size:24px; }
+  input[type="range"] { width:100%; margin:4px 0; accent-color:#2563eb; }
+  .minute-btn { padding:6px 0; min-width:40px; font-size:12px; font-weight:600; border:1.5px solid #d0d5dd; border-radius:6px; background:white; color:#555; cursor:pointer; transition:all 0.15s; }
   .minute-btn:hover { border-color:#2563eb; color:#2563eb; }
   .minute-btn.active { background:#2563eb; border-color:#2563eb; color:white; }
-  @media (max-width: 480px) { .container { padding: 20px; } }
+  .footer { margin-top:28px; text-align:center; font-size:12px; color:#999; }
+  .footer a { color:#2563eb; text-decoration:none; }
+  @media (max-width:480px) { .container { padding:20px; } }
 </style>
 </head>
 <body>
@@ -65,9 +75,14 @@
   <p class="subtitle">Predicción de aglomeración en estaciones del Metro de Londres</p>
 
   <div class="form-group">
-    <label for="station">Estación</label>
-    <select id="station"><option value="">Cargando estaciones...</option></select>
-    <div class="search-loading" id="station-loading">Cargando listado de estaciones...</div>
+    <div style="display:flex;gap:8px;align-items:end;">
+      <div style="flex:1;">
+        <label for="station">Estación</label>
+        <select id="station"><option value="">Cargando estaciones...</option></select>
+        <div class="search-loading" id="station-loading">Cargando listado de estaciones...</div>
+      </div>
+      <button class="btn-sm star" id="fav-btn" onclick="toggleFav()" title="Guardar como favorita">☆</button>
+    </div>
   </div>
 
   <div class="form-group">
@@ -82,16 +97,25 @@
   </div>
 
   <div class="form-group">
-    <label for="hour">Hora</label>
-    <div style="display:flex;gap:8px;">
-      <select id="hour" style="flex:1;"></select>
-      <div id="minute-group" style="display:flex;gap:3px;align-items:center;">
-        <button class="minute-btn active" data-min="0" onclick="setMinute(0)">:00</button>
-        <button class="minute-btn" data-min="15" onclick="setMinute(15)">:15</button>
-        <button class="minute-btn" data-min="30" onclick="setMinute(30)">:30</button>
-        <button class="minute-btn" data-min="45" onclick="setMinute(45)">:45</button>
-      </div>
+    <label>Hora</label>
+    <div class="hour-display" id="hour-display">12<span class="min">h</span></div>
+    <input type="range" id="hour-slider" min="0" max="23" value="12" step="1">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-top:2px;">
+      <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span>
     </div>
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:8px;">
+      <button class="minute-btn active" data-min="0" onclick="setMinute(0)">:00</button>
+      <button class="minute-btn" data-min="15" onclick="setMinute(15)">:15</button>
+      <button class="minute-btn" data-min="30" onclick="setMinute(30)">:30</button>
+      <button class="minute-btn" data-min="45" onclick="setMinute(45)">:45</button>
+    </div>
+  </div>
+
+  <div class="favorites-section" id="favorites-section" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h4>★ Tus favoritas</h4>
+    </div>
+    <div id="favorites-list"></div>
   </div>
 
   <button class="btn" id="predict-btn" disabled>Consultar aglomeración</button>
@@ -100,49 +124,19 @@
   <div class="error" id="error"></div>
   <div class="result" id="result"></div>
 
-  <div class="api-playground">
-    <h3>API Playground</h3>
-
-    <div class="endpoint-group">
-      <span class="label"><span class="method get">GET</span> /health</span>
-      <div>
-        <button class="btn-sm2" onclick="window.open('/health','_blank')">/health</button>
-        <button class="btn-sm2" onclick="window.open('/health/api','_blank')">/health/api</button>
-        <button class="btn-sm2" onclick="window.open('/health/modelo','_blank')">/health/modelo</button>
-        <button class="btn-sm2" onclick="window.open('/health/database','_blank')">/health/database</button>
-      </div>
-    </div>
-
-    <div class="endpoint-group">
-      <span class="label"><span class="method get">GET</span> /stations</span>
-      <div>
-        <button class="btn-sm2" onclick="window.open('/stations','_blank')">/stations</button>
-        <button class="btn-sm2" id="station-detail-btn" onclick="openStationDetail()">/stations/{NLC}</button>
-      </div>
-    </div>
-
-    <div class="endpoint-group">
-      <span class="label"><span class="method get">GET</span> /crowding</span>
-      <div>
-        <button class="btn-sm2" onclick="openCrowdingQuery()">/crowding?estacion=...&amp;dia=...&amp;hora=...</button>
-        <button class="btn-sm2" onclick="openCrowdingPath()">/crowding/{nombre}</button>
-      </div>
-    </div>
-
-    <div class="endpoint-group">
-      <span class="label"><span class="method post">POST</span> /crowding</span>
-      <textarea id="post-body" style="width:100%;min-height:100px;padding:10px;border:1.5px solid #d0d5dd;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;resize:vertical;">{
+  <div class="api-playground" style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
+    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:12px;">Predecir múltiples estaciones</h3>
+    <textarea id="post-body" style="width:100%;min-height:100px;padding:10px;border:1.5px solid #d0d5dd;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;resize:vertical;">{
   "estaciones": [
     {"estacion": "Oxford Circus", "dia": "TWT", "hora": 8},
     {"estacion": "Waterloo", "dia": "FRI", "hora": 18}
   ]
 }</textarea>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
-        <button class="btn-sm2" onclick="sendPostCrowding()">Enviar POST</button>
-        <button class="btn-sm2" onclick="document.getElementById('file-input').click()">Subir archivo .json</button>
-        <input type="file" id="file-input" accept=".json" style="display:none" onchange="loadJsonFile(event)">
-        <button class="btn-sm2" onclick="document.getElementById('post-body').value=document.getElementById('post-body').defaultValue">Restaurar ejemplo</button>
-      </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+      <button class="btn-sm primary" onclick="sendPostCrowding()">Predecir todas</button>
+      <button class="btn-sm" onclick="document.getElementById('file-input').click()">Subir archivo .json</button>
+      <input type="file" id="file-input" accept=".json" style="display:none" onchange="loadJsonFile(event)">
+      <button class="btn-sm" onclick="document.getElementById('post-body').value=document.getElementById('post-body').defaultValue">Restaurar ejemplo</button>
     </div>
   </div>
 </div>
@@ -155,34 +149,82 @@
 const BASE = window.location.origin;
 let stations = [];
 let _minuto = 0;
+let _favorites = JSON.parse(localStorage.getItem("favStations") || "[]");
+const STORAGE_KEY = "favStations";
 
+// ---- Slider hora ----
+const slider = document.getElementById("hour-slider");
+const disp = document.getElementById("hour-display");
+slider.addEventListener("input", () => {
+  disp.innerHTML = slider.value + '<span class="min">h</span>';
+});
+
+// ---- Minutos ----
 function setMinute(m) {
   _minuto = m;
-  document.querySelectorAll(".minute-btn").forEach(b => {
-    b.classList.toggle("active", parseInt(b.dataset.min) === m);
-  });
+  document.querySelectorAll(".minute-btn").forEach(b =>
+    b.classList.toggle("active", parseInt(b.dataset.min) === m));
 }
 
-for (let h = 0; h < 24; h++) {
-  const o = document.createElement("option");
-  o.value = h;
-  o.textContent = String(h).padStart(2, "0") + ":00";
-  document.getElementById("hour").appendChild(o);
+// ---- Favoritos ----
+function saveFavs() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(_favorites));
+  renderFavs();
 }
-document.getElementById("hour").value = new Date().getHours();
 
+function toggleFav() {
+  const nlc = document.getElementById("station").value;
+  if (!nlc) return;
+  const s = stations.find(st => st.NLC == nlc);
+  if (!s) return;
+  const idx = _favorites.findIndex(f => f.NLC == nlc);
+  if (idx >= 0) { _favorites.splice(idx, 1); } else { _favorites.push({ NLC: nlc, nombre: s.nombre }); }
+  saveFavs();
+  updateFavBtn();
+}
+
+function updateFavBtn() {
+  const nlc = document.getElementById("station").value;
+  const btn = document.getElementById("fav-btn");
+  const isFav = nlc && _favorites.some(f => f.NLC == nlc);
+  btn.textContent = isFav ? "★" : "☆";
+  btn.classList.toggle("active", isFav);
+}
+
+function renderFavs() {
+  const section = document.getElementById("favorites-section");
+  const list = document.getElementById("favorites-list");
+  if (_favorites.length === 0) { section.style.display = "none"; return; }
+  section.style.display = "block";
+  list.innerHTML = _favorites.map(f =>
+    `<span class="fav-tag" onclick="selectFav('${f.NLC}')">${f.nombre} <span class="del" onclick="event.stopPropagation();removeFav('${f.NLC}')">✕</span></span>`
+  ).join("");
+}
+
+function selectFav(nlc) {
+  document.getElementById("station").value = nlc;
+  updateFavBtn();
+}
+
+function removeFav(nlc) {
+  _favorites = _favorites.filter(f => f.NLC != nlc);
+  saveFavs();
+  updateFavBtn();
+}
+
+// ---- API ----
 async function apiFetch(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55000);
   const r = await fetch(BASE + url, { signal: controller.signal });
   clearTimeout(timeout);
   const ct = r.headers.get("content-type") || "";
-  if (!ct.includes("application/json") && !ct.includes("text/json")) {
-    throw new Error("El servidor no responde (posible cold start). Inténtalo de nuevo en unos segundos.");
-  }
+  if (!ct.includes("application/json") && !ct.includes("text/json"))
+    throw new Error("El servidor no responde (posible cold start).");
   return r.json();
 }
 
+// ---- Cargar estaciones ----
 async function loadStations() {
   const sel = document.getElementById("station");
   const loadEl = document.getElementById("station-loading");
@@ -194,37 +236,34 @@ async function loadStations() {
     stations.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
     stations.forEach(s => {
       const o = document.createElement("option");
-      o.value = s.NLC;
-      o.textContent = s.nombre + (s.zona ? " (zona " + s.zona + ")" : "");
+      o.value = s.NLC; o.textContent = s.nombre + (s.zona ? " (zona " + s.zona + ")" : "");
       sel.appendChild(o);
     });
     document.getElementById("predict-btn").disabled = false;
-  } catch (e) {
-    sel.innerHTML = '<option value="">' + e.message + '</option>';
-  }
+    renderFavs();
+  } catch (e) { sel.innerHTML = '<option value="">' + e.message + "</option>"; }
   loadEl.style.display = "none";
 }
 
+document.getElementById("station").addEventListener("change", updateFavBtn);
+
+// ---- Predecir individual ----
 document.getElementById("predict-btn").addEventListener("click", async () => {
   const nlc = document.getElementById("station").value;
   const dia = document.getElementById("day").value;
-  const hora = document.getElementById("hour").value;
+  const hora = slider.value;
   if (!nlc) { showError("Selecciona una estación"); return; }
-
   const stationName = stations.find(s => s.NLC == nlc)?.nombre || nlc;
   document.getElementById("loading").style.display = "block";
   document.getElementById("error").style.display = "none";
   document.getElementById("result").style.display = "none";
-
   try {
     const data = await apiFetch("/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora);
     document.getElementById("loading").style.display = "none";
-
     if (data.error) { showError(data.error); return; }
-
     const nivel = data.nivel_aglomeracion || "Desconocido";
-    const horaStr = String(data.hora).padStart(2,"0");
-    const minStr = String(_minuto).padStart(2,"0");
+    const h = String(data.hora).padStart(2,"0");
+    const m = String(_minuto).padStart(2,"0");
     const res = document.getElementById("result");
     res.className = "result " + nivel;
     res.style.display = "block";
@@ -232,15 +271,14 @@ document.getElementById("predict-btn").addEventListener("click", async () => {
       <h2><span class="badge ${nivel}">${nivel}</span></h2>
       <div class="stat"><span class="label">Estación</span><span class="value">${data.estacion}</span></div>
       <div class="stat"><span class="label">Día</span><span class="value">${data.dia}</span></div>
-      <div class="stat"><span class="label">Tramo</span><span class="value">${horaStr}:${minStr} - ${horaStr}:${String(_minuto+15).padStart(2,"0")} h</span></div>
+      <div class="stat"><span class="label">Tramo</span><span class="value">${h}:${m} - ${h}:${String(_minuto+15).padStart(2,"0")} h</span></div>
       <div class="stat"><span class="label">Pasajeros estimados (15 min)</span><span class="value">${data.pasajeros_15min_estimados}</span></div>
       <div class="stat"><span class="label">NLC</span><span class="value">${data.NLC}</span></div>
-      <div class="stat"><span class="label">Coordenadas</span><span class="value">${data.latitud?.toFixed(4)}, ${data.longitud?.toFixed(4)}</span></div>
-    `;
+      <div class="stat"><span class="label">Coordenadas</span><span class="value">${data.latitud?.toFixed(4)}, ${data.longitud?.toFixed(4)}</span></div>`;
   } catch (e) {
     document.getElementById("loading").style.display = "none";
     showError(e.message.includes("cold start")
-      ? "El servidor está arrancando (cold start). Espera unos segundos y pulsa \"Reintentar\"."
+      ? "El servidor está arrancando (cold start). Espera y pulsa \"Reintentar\"."
       : "Error: " + e.message);
   }
 });
@@ -251,36 +289,15 @@ function showError(msg) {
   el.style.display = "block";
 }
 
-function openCrowdingQuery() {
-  const nlc = document.getElementById("station").value;
-  const dia = document.getElementById("day").value;
-  const hora = document.getElementById("hour").value;
-  const stationName = stations.find(s => s.NLC == nlc)?.nombre || "Oxford%20Circus";
-  window.open("/crowding?estacion=" + encodeURIComponent(stationName) + "&dia=" + dia + "&hora=" + hora, "_blank");
-}
-
-function openCrowdingPath() {
-  const nlc = document.getElementById("station").value;
-  const stationName = stations.find(s => s.NLC == nlc)?.nombre || "Oxford%20Circus";
-  window.open("/crowding/" + encodeURIComponent(stationName), "_blank");
-}
-
-function openStationDetail() {
-  const nlc = document.getElementById("station").value;
-  if (!nlc) { alert("Selecciona una estación primero"); return; }
-  window.open("/stations/" + nlc, "_blank");
-}
-
+// ---- Predecir multiples (POST con tabla + menos saturada) ----
 async function sendPostCrowding() {
-  const bodyEl = document.getElementById("post-body");
   let payload;
-  try {
-    payload = JSON.parse(bodyEl.value);
-  } catch (e) {
-    alert("JSON inválido: " + e.message);
-    return;
-  }
+  try { payload = JSON.parse(document.getElementById("post-body").value); }
+  catch (e) { alert("JSON inválido: " + e.message); return; }
+
   document.getElementById("loading").style.display = "block";
+  document.getElementById("error").style.display = "none";
+  document.getElementById("result").style.display = "none";
   try {
     const r = await fetch(BASE + "/crowding", {
       method: "POST",
@@ -289,27 +306,50 @@ async function sendPostCrowding() {
     });
     const data = await r.json();
     document.getElementById("loading").style.display = "none";
+    if (data.error) { showError(data.error); return; }
+
     const res = document.getElementById("result");
     res.style.display = "block";
     res.className = "result";
-    res.innerHTML = "<h2>POST /crowding</h2><div class='json-box'>" + JSON.stringify(data, null, 2) + "</div>";
+
+    const results = data.resultados || [];
+    if (results.length === 0) { res.innerHTML = "<p>Sin resultados</p>"; return; }
+
+    const sorted = [...results].sort((a, b) => (a.pasajeros_15min_estimados || 0) - (b.pasajeros_15min_estimados || 0));
+    const least = sorted[0];
+    const leastIdx = results.indexOf(least);
+
+    let html = '<h2>Resultados múltiples</h2>';
+    html += `<p style="font-size:13px;color:#047857;margin:8px 0;padding:8px 12px;background:#ecfdf5;border-radius:6px;">
+      🟢 Menos saturada: <strong>${least.estacion}</strong> — ${least.pasajeros_15min_estimados} pasajeros/15min (${least.nivel_aglomeracion})
+    </p>`;
+    html += '<table class="result-table"><tr><th>#</th><th>Estación</th><th>Día</th><th>Hora</th><th>Pasajeros</th><th>Nivel</th></tr>';
+    results.forEach((r, i) => {
+      const cls = i === leastIdx ? ' class="least"' : "";
+      const lvl = r.nivel_aglomeracion || "";
+      html += `<tr${cls}><td>${i+1}</td><td>${r.estacion}</td><td>${r.dia}</td><td>${r.hora}h</td><td>${r.pasajeros_15min_estimados}</td><td><span class="badge ${lvl}">${lvl}</span></td></tr>`;
+    });
+    html += "</table>";
+    res.innerHTML = html;
   } catch (e) {
     document.getElementById("loading").style.display = "none";
-    showError("Error POST: " + (e.message.includes("unexpected character")
-      ? "El servidor no respondió con JSON (posible cold start). Reintenta en unos segundos."
+    showError("Error: " + (e.message.includes("unexpected character")
+      ? "El servidor no respondió con JSON (posible cold start). Reintenta."
       : e.message));
   }
 }
 
+// ---- File upload ----
 function loadJsonFile(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
     document.getElementById("post-body").value = e.target.result;
+    sendPostCrowding();
   };
   reader.readAsText(file);
-  event.target.value = ""; // permitir re-subir el mismo archivo
+  event.target.value = "";
 }
 
 loadStations();
