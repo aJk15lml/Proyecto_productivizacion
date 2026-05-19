@@ -296,16 +296,16 @@ El proyecto se construye siguiendo el principio **"MVP primero, escalar por nive
 14. **Hoja de NUMBAT a usar:** `Station_Entries` (no `Station_Boarders`, porque queremos medir aglomeración en la estación, no en los andenes).
 15. **Filtrado de estaciones todas-cero:** se eliminan las 39 estaciones de Tramlink u otras no medidas (Total == 0). Quedan 432 estaciones válidas por archivo.
 16. **Dedup de metadata:** la hoja `Stn-Mode` del PTSP Oasis trae NLC 866 (West India Quay) duplicado; el script de preprocesado lo deduplica para no inflar el join.
+17. **Discretización en niveles:** percentiles globales sobre el dataset diurno completo (p25/p50/p75), no por estación como se había planeado inicialmente. Ver sección "Discretización en niveles".
+18. **Modelo único (no uno por estación):** se usa un único XGBoost con `NLC` como feature categórica (432 categorías). Implementado y desplegado.
+19. **Target `log1p`:** sí, se aplica `log1p(passengers)` como target de entrenamiento. En inferencia se deshace con `expm1`.
+20. **Split train/test:** entrenamiento con 2023+2024 (pool completo), validación temporal 2023→2024 para métricas. El modelo de producción (`xgboost_prod.pkl`) se re-entrenó con ambos años.
 
 ---
 
 ## Decisiones pendientes
 
 - **¿Filtrar estaciones con `num_modes == 0`?** Son 121 estaciones que solo tienen modo National Rail (no TfL rail). NUMBAT sí las mide, pero la feature `num_modes` no las describe bien. Pendiente del EDA.
-- **¿Aplicar `log1p` al target?** La distribución de `passengers` tiene cola larga (max ≈ 5961, mediana ≈ 39). Pendiente de confirmar en el EDA si compensa el log.
-- **Split train/test:** entrenamiento con 2023 entero y test con 2024 entero (validación temporal) **o** pool 2023+2024 con split aleatorio (más datos pero sin test temporal). Pendiente del EDA: si los patrones 2023 vs 2024 son muy parecidos, ambos enfoques son similares; si difieren, el temporal es más informativo.
-- **Umbrales de discretización** Bajo/Medio/Alto/Saturado en la respuesta de la API (probablemente percentiles por estación).
-- **¿Modelo único o uno por estación?** En principio uno único con `NLC` como feature; XGBoost lo absorbe bien y es más simple de desplegar.
 
 ---
 
@@ -428,29 +428,186 @@ pasajeros = float(np.clip(np.expm1(y_pred_log), 0, None))
 
 Con el modelo en `models/xgboost_prod.pkl`, lo que falta para terminar el Nivel 1 es **tu parte**:
 
-1. **Construir `app.py`** con las 4 rutas obligatorias:
+1. ~~**Construir `app.py`** con las 4 rutas obligatorias~~ **(Completado)**
    - `GET /health` — devuelve `{"status": "ok", "model_loaded": True}` para confirmar que el modelo se cargó.
    - `GET /crowding/<estacion>` — parámetro en el **path**. Recibe el nombre de la estación, busca su NLC y features estructurales en una tabla de lookup (que podemos generar desde el parquet), y predice para "ahora mismo".
    - `GET /crowding?estacion=...&dia=...&hora=...` — parámetros en la **query string**, con control fino.
    - `POST /crowding` — recibe JSON con varias estaciones y condiciones (`{"estacion": "...", "dia": "TWT", "hora": 18}` o un array de ellas), devuelve predicciones.
 
-2. **Crear `data/processed/lookup_estaciones.parquet`** (o cargarlo a memoria al arrancar la app): tabla con NLC, nombre, num_lines, num_modes, fare zones, lat/lon, ASC. Es el "diccionario" que la API consulta cuando el usuario pide una estación por nombre.
+2. ~~**Crear `data/processed/lookup_estaciones.parquet`** (o cargarlo a memoria al arrancar la app)~~ **(Completado)**
+   - Se carga el parquet `numbat_long.parquet` directamente desde `predictor.py` en la primera request (lazy loading). No se genera un lookup separado.
 
-3. **Mapear `passengers` → etiqueta de aglomeración** (Bajo / Medio / Alto / Saturado). Recomendación: percentiles por estación (cada estación tiene su propia escala; Oxford Circus a 1000 pasajeros está poco saturada, Acton Town a 1000 estaría reventando).
+3. ~~**Mapear `passengers` → etiqueta de aglomeración**~~ **(Completado — con percentiles globales, NO por estación)**
+   - Ver sección "Discretización en niveles" más abajo para los valores exactos.
 
-4. **Validación de inputs y manejo de errores:** 400 si la estación no existe o el día no es válido; 500 si el modelo falla con un mensaje claro.
+4. ~~**Validación de inputs y manejo de errores**~~ **(Completado)**
+   - 400 si la estación no existe, día inválido, hora fuera de rango o JSON mal formado.
+   - 500 si el modelo falla.
+   - 404 si el endpoint path devuelve error de estación.
 
-5. **Probar en local** con Postman / curl. Guardar ejemplos de petición/respuesta para `docs/ejemplos_api.md`.
+5. ~~**Probar en local**~~ **(Completado)**
+   - Verificado con curl y navegador.
 
-6. **Desplegar en Render**: conectar el repo de GitHub, configurar el `Procfile` (`web: gunicorn app:app`), variables de entorno si hace falta. Tras el despliegue, probar la URL pública.
+6. ~~**Desplegar en Render**~~ **(Completado — con incidencias)**
+   - URL pública: https://proyecto-productivizacion.onrender.com/
+   - Se han realizado varios ajustes post-despliegue (ver sección "Bugs y limitaciones conocidas").
 
-7. **Vídeo de respaldo** grabado de la demo en local en cuanto el despliegue esté vivo.
+7. ~~**Vídeo de respaldo**~~ **(Pendiente)**
 
-### Dependencias para el despliegue
+---
 
-`requirements.txt` ya incluye todo lo necesario (`flask`, `gunicorn`, `xgboost`, `pandas`, `joblib`, `pyarrow`). Render instala desde ahí automáticamente.
+## Implementación de la API (parte de Pablo)
 
-### Tamaño del bundle
+### Endpoints implementados
 
-- `models/xgboost_prod.pkl`: estimado < 10 MB.
-- Total del repo sin datos crudos: < 15 MB. Cabe holgadamente en el free tier de Render.
+| Método | Path | Parámetros | Ejemplo de respuesta |
+|--------|------|------------|---------------------|
+| GET | `/` | — | HTML con formulario interactivo |
+| GET | `/health` | — | `{"status":"ok","servicio":"London Crowding API","modelo_cargado":true,"timestamp":"..."}` |
+| GET | `/health/<componente>` | `componente`: `api`, `modelo`, `database` | `{"componente":"modelo","status":"healthy","ruta":"models/xgboost_prod.pkl"}` |
+| GET | `/crowding/<estacion>` | `estacion` (path): nombre o NLC | `{"estacion":"Waterloo LU","NLC":502,"dia":"TWT","hora":9,"pasajeros_15min_estimados":284.2,"nivel_aglomeracion":"Alto","score":0.05,"latitud":51.503,"longitud":-0.113}` |
+| GET | `/crowding` | `estacion` (query, obligatorio), `dia` (opcional, defecto TWT), `hora` (opcional, defecto 12) | Ídem |
+| POST | `/crowding` | Body JSON: `{"estaciones":[{"estacion":"...","dia":"...","hora":N},...]}` o array directo | `{"resultados":[{...},{...}]}` |
+| GET | `/stations` | — | `{"total":432,"estaciones":[{"NLC":...,"nombre":"...","zona":"...","lineas":N,"modos":N,"latitud":...,"longitud":...},...]}` |
+| GET | `/stations/<identificador>` | `identificador`: NLC (int) o nombre exacto | Detalle completo de la estación |
+
+### Construcción de features en tiempo de inferencia
+
+El código de inferencia está en `backend/app/predictor.py`, función `predecir_estacion()`.
+
+**Casteo de NLC y day_type antes de `model.predict()`:**
+
+```python
+# Construir fila con las 12 features
+fila = pd.DataFrame([{
+    "NLC": nlc_val,                          # int (NLC numérico)
+    "day_type": dia_norm,                     # str: "MON"/"TWT"/"FRI"/"SAT"/"SUN"
+    "hour": hora,                             # int 0-23
+    "num_lines": num_lines,                   # int
+    "num_modes": num_modes_val,               # int
+    "tiene_modo_tfl_explicito": tiene_modo,   # 0/1
+    "InnerFareZone": iz,                      # int
+    "OuterFareZone": oz,                      # int
+    "Latitude": lat,                          # float
+    "Longitude": lon,                         # float
+    "is_peak": is_peak,                       # 0/1
+    "is_night": is_night,                     # 0/1
+}])
+
+# Casteos necesarios para XGBoost (enable_categorical=True)
+fila["NLC"] = fila["NLC"].astype("category")            # sin categorías explícitas
+fila["day_type"] = pd.Categorical(fila["day_type"],       # con 5 categorías explícitas
+                                   categories=_day_types, # ["MON","TWT","FRI","SAT","SUN"]
+                                   ordered=False)
+
+# Predecir y deshacer log1p
+y_pred_log = _modelo.predict(fila[_features])[0]
+pasajeros = float(np.clip(np.expm1(y_pred_log), 0, None))
+```
+
+Nota: `NLC` se castea a `category` **sin pasar la lista completa de 432 categorías** que el modelo vio en entrenamiento. `day_type` sí se castea con las 5 categorías explícitas. Esto puede causar un mapeo ordinal incorrecto en XGBoost (ver "Bugs y limitaciones").
+
+**Features calculadas en inferencia (no del lookup):**
+- `is_peak = 1 if dia_norm in ("MON","TWT","FRI") and (7 <= hora < 9.5 or 17 <= hora < 19.5) else 0`
+- `is_night = 1 if hora < 5 else 0`
+- `tiene_modo = 1 if num_modes > 0 else 0`
+
+### Lookup de estaciones
+
+**Origen:** `data/processed/numbat_long.parquet` (3.5 MB, 23 columnas, 414.720 filas, 432 estaciones únicas).
+
+**Carga:** perezosa (lazy), en la primera request que necesita el lookup. No al arrancar de la app. Se cachea en las globales `_stations_by_nlc` (dict NLC → info, O(1)) y `_stations_list` (lista para búsqueda por nombre).
+
+**Columnas cargadas desde el parquet:** NLC, ASC, station_name_numbat, UniqueStationName, fare_zone_str, InnerFareZone, OuterFareZone, FullyGated, Hub, Active, TfL, Latitude, Longitude, num_lines, num_modes.
+
+**Búsqueda de estación por nombre:**
+1. Si el input es todo dígitos, se busca como NLC en `_stations_by_nlc` (O(1)).
+2. Si no, se itera `_stations_list` comparando `UniqueStationName`, `station_name_numbat`, `ASC` y `NLC` como string.
+3. Si no hay match exacto, se devuelven sugerencias de nombres parciales.
+
+### Discretización en niveles
+
+**Mecanismo:** percentiles **globales** (no por estación), calculados sobre los pasajeros **diurnos** (`is_night == False`) de todo el dataset NUMBAT.
+
+```python
+# Cálculo (una vez, al cargar el lookup)
+diurno = df[df["is_night"] == False]["passengers"]
+_PERCENTILES = {
+    "p25": float(diurno.quantile(0.25)),   # ~7.2 pasajeros/15min
+    "p50": float(diurno.quantile(0.50)),   # ~38.9
+    "p75": float(diurno.quantile(0.75)),   # ~96.5
+}
+
+# Aplicación
+def nivel_aglomeracion(pasajeros: float) -> str:
+    if pasajeros <= p25: return "Bajo"
+    elif pasajeros <= p50: return "Medio"
+    elif pasajeros <= p75: return "Alto"
+    else: return "Saturado"
+```
+
+Los valores exactos de los percentiles dependen del dataset y se calculan en tiempo de ejecución. Como referencia: el dataset 2023+2024 tiene max ≈ 5961, mediana ≈ 39.
+
+Esta implementación contradice la decisión pendiente del documento original, que sugería percentiles **por estación**. Con la implementación actual, estaciones grandes (Oxford Circus, King's Cross) aparecen sistemáticamente como "Saturadas" mientras que estaciones pequeñas difícilmente pasan de "Medio".
+
+### Configuración de Render
+
+| Parámetro | Valor |
+|-----------|-------|
+| **Plataforma** | Render (plan gratuito, 512 MB RAM, 0.1 CPU) |
+| **URL** | https://proyecto-productivizacion.onrender.com/ |
+| **Build command** | Por defecto de Render para Python (`pip install -r requirements.txt`) |
+| **Start command** | `gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120` |
+| **Root Directory** | `backend` (en Dashboard de Render) |
+| **Runtime** | Python 3.11.13 (forzado via `backend/runtime.txt`) |
+| **Procfile** | `backend/Procfile`: `web: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120` |
+| **wsgi.py** | En raíz del repo. Añade `backend/` al `sys.path` y hace `from app import app` |
+| **Variables de entorno** | Ninguna obligatoria. Opcionales: `RUTA_MODELO`, `RUTA_PARQUET`, `MODEL_DIR`, `PORT`, `FLASK_DEBUG` |
+| **Keep-alive** | No hay servicio externo (ni UptimeRobot, ni cron-job.org). Render mantiene el health check interno cada 5s (`GET /health` con User-Agent `Render/1.0`), que mantiene la instancia activa mientras haya tráfico. |
+
+**Dependencias** (en `backend/requirements.txt`):
+```
+flask==3.0.3
+gunicorn==22.0.0
+pandas==2.2.2
+numpy==1.26.4
+xgboost==2.0.3
+joblib==1.4.2
+python-dotenv==1.0.1
+pyarrow==17.0.0
+flask-cors==4.0.1
+```
+
+**Tamaños de archivo relevantes para memoria:**
+- `models/xgboost_prod.pkl`: 37.7 MB
+- `data/processed/numbat_long.parquet`: 3.5 MB
+
+### Bugs y limitaciones conocidas
+
+1. **Discretización con percentiles globales en vez de por estación.**  
+   La decisión pendiente del documento original especificaba "percentiles por estación" (cada estación con su propia escala). La implementación actual usa percentiles globales sobre todo el dataset diurno. Esto hace que estaciones grandes como Oxford Circus aparezcan siempre como "Saturadas" y estaciones pequeñas raramente pasen de "Medio", independientemente de su contexto individual.  
+   *Severidad: media — afecta a la utilidad real de la etiqueta.*
+
+2. **`NLC` casteado a `category` sin categorías explícitas.**  
+   El modelo se entrenó con NLC como categórica con 432 valores distintos, pero en inferencia se usa `fila["NLC"].astype("category")` sin pasar las categorías que vio el modelo. `day_type` sí se pasa con sus 5 categorías explícitas.  
+   *Severidad: baja-media — XGBoost probablemente iguala por valor, pero no es garantizable.*
+
+3. **Búsqueda de estación por nombre sensible a formato.**  
+   La lógica de búsqueda compara exactamente el nombre ingresado contra `UniqueStationName`, `station_name_numbat`, `ASC` y `NLC`. Diferencias de espacios, mayúsculas/minúsculas, paréntesis o sufijos ("Waterloo LU" vs "Waterloo") pueden no coincidir, aunque hay un fallback de coincidencia parcial con sugerencias.  
+   *Severidad: baja — el frontend envía nombres desde el listado oficial.*
+
+4. **Memory limit superado con 2 workers de gunicorn.**  
+   En el primer despliegue, `--workers 2` provocó que Render matara el proceso por exceso de memoria (~38 MB de modelo × 2 workers + overhead de Python + pandas). Se redujo a 1 worker.  
+   *Severidad: resuelta, pero frágil — cualquier biblioteca adicional en requirements podría volver a superar el límite.*
+
+5. **Cold start en Render free tier.**  
+   El modelo y lookup se cargan en la primera request (lazy loading), no al arrancar del proceso. La primera request puede tardar 5-10s adicionales mientras se carga joblib + parquet.  
+   *Severidad: baja — el frontend tiene un timeout de 55s y maneja el error.*
+
+6. **Score ad-hoc (`pasajeros / 6000`).**  
+   El campo `score` en la respuesta es una normalización lineal sobre un máximo arbitrario, no un indicador basado en percentiles reales ni en la distribución del modelo.  
+   *Severidad: baja — campo auxiliar para frontend, no se usa para decisiones.*
+
+---
+
+## Decisiones pendientes (actualizado)
