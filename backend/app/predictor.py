@@ -9,7 +9,7 @@ El modelo se serializo con joblib y contiene un dict con:
 """
 
 import os
-import sys
+import gc
 from pathlib import Path
 
 import joblib
@@ -59,6 +59,7 @@ def _cargar_modelo():
     _features_cat = blob.get("features_categoricas", ["NLC", "day_type"])
     _day_types = blob.get("day_type_categories", ["MON", "TWT", "FRI", "SAT", "SUN"])
     del blob  # liberar ~38 MB
+    gc.collect()
 
 
 def _cargar_lookup():
@@ -105,6 +106,7 @@ def _cargar_lookup():
             else:
                 _station_percentiles[nlc] = {"p25": 0, "p50": 0, "p75": 0}
     del df, lookup  # liberar memoria
+    gc.collect()
 
 
 # ---------------------------------------------------------------------------
