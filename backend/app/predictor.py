@@ -33,12 +33,14 @@ _modelo = None
 _features = None
 _features_cat = None
 _day_types = None
+_nlc_categories = None  # lista ordenada de los 432 NLCs que vio el modelo
 
 # Lookup eficiente: dict NLC->info + lista para busqueda por nombre
 _stations_by_nlc = None
 _stations_list = None
 
-_PERCENTILES = None
+# Percentiles de aglomeracion POR ESTACION (calculados del parquet diurno)
+_station_percentiles = None  # dict: NLC -> {"p25": ..., "p50": ..., "p75": ...}
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +62,7 @@ def _cargar_modelo():
 
 
 def _cargar_lookup():
-    global _stations_by_nlc, _stations_list, _PERCENTILES
+    global _stations_by_nlc, _stations_list, _station_percentiles, _nlc_categories
     if _stations_by_nlc is not None:
         return
     if not os.path.exists(RUTA_PARQUET):
@@ -84,13 +86,24 @@ def _cargar_lookup():
         _stations_by_nlc[nlc] = rec
         _stations_list.append(rec)
 
-    # Calcular percentiles aqui (evita leer parquet dos veces)
-    diurno = df[df["is_night"] == False]["passengers"] if "is_night" in df.columns else df["passengers"]
-    _PERCENTILES = {
-        "p25": float(diurno.quantile(0.25)),
-        "p50": float(diurno.quantile(0.50)),
-        "p75": float(diurno.quantile(0.75)),
-    }
+    # Lista ordenada de NLCs para castear como categorical explicito
+    _nlc_categories = sorted(_stations_by_nlc.keys())
+
+    # Percentiles POR ESTACION (solo diurno)
+    _station_percentiles = {}
+    diurno = df[df["is_night"] == False] if "is_night" in df.columns else df
+    if "passengers" in diurno.columns and len(diurno) > 0:
+        pcts = diurno.groupby("NLC")["passengers"].quantile([0.25, 0.50, 0.75]).unstack()
+        for nlc in _stations_by_nlc:
+            if nlc in pcts.index:
+                row = pcts.loc[nlc]
+                _station_percentiles[nlc] = {
+                    "p25": float(row.iloc[0]) if not pd.isna(row.iloc[0]) else 0,
+                    "p50": float(row.iloc[1]) if not pd.isna(row.iloc[1]) else 0,
+                    "p75": float(row.iloc[2]) if not pd.isna(row.iloc[2]) else 0,
+                }
+            else:
+                _station_percentiles[nlc] = {"p25": 0, "p50": 0, "p75": 0}
     del df, lookup  # liberar memoria
 
 
@@ -115,16 +128,17 @@ def normalizar_dia(dia: str) -> str:
     }.get(d, dia.upper())
 
 
-def nivel_aglomeracion(pasajeros: float) -> str:
-    if _PERCENTILES is None:
-        if pasajeros < 10:
+def nivel_aglomeracion(pasajeros: float, nlc: int) -> str:
+    p = _station_percentiles.get(nlc) if _station_percentiles is not None else None
+    if p is None or (p["p25"] == 0 and p["p50"] == 0 and p["p75"] == 0):
+        # fallback si no hay percentiles para esta estacion
+        if pasajeros < 5:
             return "Bajo"
-        elif pasajeros < 100:
+        elif pasajeros < 20:
             return "Medio"
-        elif pasajeros < 500:
+        elif pasajeros < 80:
             return "Alto"
         return "Saturado"
-    p = _PERCENTILES
     if pasajeros <= p["p25"]:
         return "Bajo"
     elif pasajeros <= p["p50"]:
@@ -212,8 +226,8 @@ def predecir_estacion(
         "is_night": is_night,
     }])
 
-    # Casteos necesarios para XGBoost
-    fila["NLC"] = fila["NLC"].astype("category")
+    # Casteos necesarios para XGBoost (enable_categorical=True)
+    fila["NLC"] = pd.Categorical(fila["NLC"], categories=_nlc_categories, ordered=False)
     fila["day_type"] = pd.Categorical(fila["day_type"], categories=_day_types, ordered=False)
 
     # Predecir y deshacer log1p
@@ -228,7 +242,7 @@ def predecir_estacion(
         "dia": dia_norm,
         "hora": hora,
         "pasajeros_15min_estimados": round(pasajeros, 1),
-        "nivel_aglomeracion": nivel_aglomeracion(pasajeros),
+        "nivel_aglomeracion": nivel_aglomeracion(pasajeros, int(nlc_val)),
         "score": round(pasajeros / 6000, 2),  # normalizado aprox sobre maximo
         "latitud": lat,
         "longitud": lon,

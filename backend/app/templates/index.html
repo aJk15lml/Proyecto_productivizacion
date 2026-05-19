@@ -52,6 +52,10 @@
   .json-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
   .footer { margin-top: 28px; text-align: center; font-size: 12px; color: #999; }
   .footer a { color: #2563eb; text-decoration: none; }
+  .minute-group { display:flex; gap:3px; align-items:center; }
+  .minute-btn { padding:8px 0; min-width:44px; font-size:13px; font-weight:600; border:1.5px solid #d0d5dd; border-radius:6px; background:white; color:#555; cursor:pointer; transition:all 0.15s; }
+  .minute-btn:hover { border-color:#2563eb; color:#2563eb; }
+  .minute-btn.active { background:#2563eb; border-color:#2563eb; color:white; }
   @media (max-width: 480px) { .container { padding: 20px; } }
 </style>
 </head>
@@ -79,7 +83,15 @@
 
   <div class="form-group">
     <label for="hour">Hora</label>
-    <select id="hour"></select>
+    <div style="display:flex;gap:8px;">
+      <select id="hour" style="flex:1;"></select>
+      <div id="minute-group" style="display:flex;gap:3px;align-items:center;">
+        <button class="minute-btn active" data-min="0" onclick="setMinute(0)">:00</button>
+        <button class="minute-btn" data-min="15" onclick="setMinute(15)">:15</button>
+        <button class="minute-btn" data-min="30" onclick="setMinute(30)">:30</button>
+        <button class="minute-btn" data-min="45" onclick="setMinute(45)">:45</button>
+      </div>
+    </div>
   </div>
 
   <button class="btn" id="predict-btn" disabled>Consultar aglomeración</button>
@@ -136,12 +148,20 @@
 </div>
 
 <div class="footer">
-  <a href="https://github.com/tu-repo" target="_blank">GitHub</a>
+  <a href="https://github.com/aJk15lml/Proyecto_productivizacion/tree/dev" target="_blank">GitHub</a>
 </div>
 
 <script>
 const BASE = window.location.origin;
 let stations = [];
+let _minuto = 0;
+
+function setMinute(m) {
+  _minuto = m;
+  document.querySelectorAll(".minute-btn").forEach(b => {
+    b.classList.toggle("active", parseInt(b.dataset.min) === m);
+  });
+}
 
 for (let h = 0; h < 24; h++) {
   const o = document.createElement("option");
@@ -203,6 +223,8 @@ document.getElementById("predict-btn").addEventListener("click", async () => {
     if (data.error) { showError(data.error); return; }
 
     const nivel = data.nivel_aglomeracion || "Desconocido";
+    const horaStr = String(data.hora).padStart(2,"0");
+    const minStr = String(_minuto).padStart(2,"0");
     const res = document.getElementById("result");
     res.className = "result " + nivel;
     res.style.display = "block";
@@ -210,7 +232,7 @@ document.getElementById("predict-btn").addEventListener("click", async () => {
       <h2><span class="badge ${nivel}">${nivel}</span></h2>
       <div class="stat"><span class="label">Estación</span><span class="value">${data.estacion}</span></div>
       <div class="stat"><span class="label">Día</span><span class="value">${data.dia}</span></div>
-      <div class="stat"><span class="label">Hora</span><span class="value">${String(data.hora).padStart(2,"0")}:00</span></div>
+      <div class="stat"><span class="label">Tramo</span><span class="value">${horaStr}:${minStr} - ${horaStr}:${String(_minuto+15).padStart(2,"0")} h</span></div>
       <div class="stat"><span class="label">Pasajeros estimados (15 min)</span><span class="value">${data.pasajeros_15min_estimados}</span></div>
       <div class="stat"><span class="label">NLC</span><span class="value">${data.NLC}</span></div>
       <div class="stat"><span class="label">Coordenadas</span><span class="value">${data.latitud?.toFixed(4)}, ${data.longitud?.toFixed(4)}</span></div>
