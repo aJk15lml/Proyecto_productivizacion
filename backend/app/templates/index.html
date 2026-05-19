@@ -315,7 +315,13 @@ async function sendPostCrowding() {
     const results = data.resultados || [];
     if (results.length === 0) { res.innerHTML = "<p>Sin resultados</p>"; return; }
 
-    const sorted = [...results].sort((a, b) => (a.pasajeros_15min_estimados || 0) - (b.pasajeros_15min_estimados || 0));
+    const levelRank = { "Bajo": 0, "Medio": 1, "Alto": 2, "Saturado": 3 };
+    const sorted = [...results].sort((a, b) => {
+      const ra = levelRank[a.nivel_aglomeracion] ?? 99;
+      const rb = levelRank[b.nivel_aglomeracion] ?? 99;
+      if (ra !== rb) return ra - rb;
+      return (a.pasajeros_15min_estimados || 0) - (b.pasajeros_15min_estimados || 0);
+    });
     const least = sorted[0];
     const leastIdx = results.indexOf(least);
 

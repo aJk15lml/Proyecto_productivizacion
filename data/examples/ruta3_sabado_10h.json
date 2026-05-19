@@ -1,6 +1,6 @@
 {
   "estaciones": [
-    {"estacion": "Paddington", "dia": "SAT", "hora": 10},
+    {"estacion": "Paddington NR", "dia": "SAT", "hora": 10},
     {"estacion": "Marylebone", "dia": "SAT", "hora": 10},
     {"estacion": "Baker Street", "dia": "SAT", "hora": 10}
   ]

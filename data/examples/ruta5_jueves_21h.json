@@ -1,7 +1,7 @@
 {
   "estaciones": [
     {"estacion": "King's Cross St. Pancras", "dia": "TWT", "hora": 21},
-    {"estacion": "Euston", "dia": "TWT", "hora": 21},
+    {"estacion": "Euston LU", "dia": "TWT", "hora": 21},
     {"estacion": "St. Paul's", "dia": "TWT", "hora": 21}
   ]
 }
