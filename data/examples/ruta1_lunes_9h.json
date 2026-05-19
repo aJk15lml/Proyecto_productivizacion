@@ -1,0 +1,7 @@
+{
+  "estaciones": [
+    {"estacion": "Oxford Circus", "dia": "MON", "hora": 9},
+    {"estacion": "Bond Street", "dia": "MON", "hora": 9},
+    {"estacion": "Tottenham Court Road", "dia": "MON", "hora": 9}
+  ]
+}

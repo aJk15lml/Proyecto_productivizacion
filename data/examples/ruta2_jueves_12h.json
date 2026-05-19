@@ -1,0 +1,7 @@
+{
+  "estaciones": [
+    {"estacion": "Liverpool Street", "dia": "TWT", "hora": 12},
+    {"estacion": "Bank", "dia": "TWT", "hora": 12},
+    {"estacion": "Moorgate", "dia": "TWT", "hora": 12}
+  ]
+}
