@@ -29,15 +29,15 @@ RUTA_PARQUET = os.getenv("RUTA_PARQUET", str(RAIZ / "data" / "processed" / "numb
 # Estado global (carga perezosa)
 # ---------------------------------------------------------------------------
 
-_blob = None
 _modelo = None
 _features = None
 _features_cat = None
 _day_types = None
-_stations_lookup = None  # dict: nombre_estacion -> info
 
-# Umbrales de aglomeracion (percentiles globales, se pueden ajustar)
-# Se calculan a partir de los datos de entrenamiento.
+# Lookup eficiente: dict NLC->info + lista para busqueda por nombre
+_stations_by_nlc = None
+_stations_list = None
+
 _PERCENTILES = None
 
 
@@ -46,21 +46,22 @@ _PERCENTILES = None
 # ---------------------------------------------------------------------------
 
 def _cargar_modelo():
-    global _blob, _modelo, _features, _features_cat, _day_types
+    global _modelo, _features, _features_cat, _day_types
     if _modelo is not None:
         return
     if not os.path.exists(RUTA_MODELO):
         raise FileNotFoundError(f"Modelo no encontrado en {RUTA_MODELO}")
-    _blob = joblib.load(RUTA_MODELO)
-    _modelo = _blob["model"]
-    _features = _blob["features"]
-    _features_cat = _blob.get("features_categoricas", ["NLC", "day_type"])
-    _day_types = _blob.get("day_type_categories", ["MON", "TWT", "FRI", "SAT", "SUN"])
+    blob = joblib.load(RUTA_MODELO)
+    _modelo = blob["model"]
+    _features = blob["features"]
+    _features_cat = blob.get("features_categoricas", ["NLC", "day_type"])
+    _day_types = blob.get("day_type_categories", ["MON", "TWT", "FRI", "SAT", "SUN"])
+    del blob  # liberar ~38 MB
 
 
 def _cargar_lookup():
-    global _stations_lookup
-    if _stations_lookup is not None:
+    global _stations_by_nlc, _stations_list, _PERCENTILES
+    if _stations_by_nlc is not None:
         return
     if not os.path.exists(RUTA_PARQUET):
         raise FileNotFoundError(f"Parquet de lookup no encontrado en {RUTA_PARQUET}")
@@ -74,22 +75,23 @@ def _cargar_lookup():
     cols_interes = [c for c in cols_interes if c in df.columns]
     lookup = df[cols_interes].drop_duplicates(subset="NLC").copy()
     lookup["NLC"] = lookup["NLC"].astype(int)
-    _stations_lookup = lookup.to_dict(orient="records")
 
+    _stations_by_nlc = {}
+    _stations_list = []
+    for _, row in lookup.iterrows():
+        rec = row.to_dict()
+        nlc = int(rec["NLC"])
+        _stations_by_nlc[nlc] = rec
+        _stations_list.append(rec)
 
-def _cargar_percentiles():
-    global _PERCENTILES
-    if _PERCENTILES is not None:
-        return
-    if not os.path.exists(RUTA_PARQUET):
-        return
-    df = pd.read_parquet(RUTA_PARQUET)
-    diurno = df[df["is_night"] == False]["passengers"]
+    # Calcular percentiles aqui (evita leer parquet dos veces)
+    diurno = df[df["is_night"] == False]["passengers"] if "is_night" in df.columns else df["passengers"]
     _PERCENTILES = {
         "p25": float(diurno.quantile(0.25)),
         "p50": float(diurno.quantile(0.50)),
         "p75": float(diurno.quantile(0.75)),
     }
+    del df, lookup  # liberar memoria
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +116,6 @@ def normalizar_dia(dia: str) -> str:
 
 
 def nivel_aglomeracion(pasajeros: float) -> str:
-    _cargar_percentiles()
     if _PERCENTILES is None:
         if pasajeros < 10:
             return "Bajo"
@@ -157,20 +158,27 @@ def predecir_estacion(
     lookup_item = None
     posibilidades = []
 
-    for s in _stations_lookup:
-        nombre = str(s.get("UniqueStationName", "")).lower()
-        nombre_nbt = str(s.get("station_name_numbat", "")).lower()
-        asc = str(s.get("ASC", "")).lower()
-        nlc = str(s.get("NLC", ""))
+    # Busqueda exacta por NLC primero
+    if estacion_nombre.isdigit():
+        nlc_key = int(estacion_nombre)
+        if nlc_key in _stations_by_nlc:
+            lookup_item = _stations_by_nlc[nlc_key]
 
-        if nombre == estacion_nombre.lower() or nombre_nbt == estacion_nombre.lower():
-            lookup_item = s
-            break
-        if estacion_nombre.lower() in nombre or estacion_nombre.lower() in nombre_nbt:
-            posibilidades.append(s.get("UniqueStationName", s.get("station_name_numbat", "")))
-        if estacion_nombre == asc or estacion_nombre == nlc:
-            lookup_item = s
-            break
+    if lookup_item is None:
+        for s in _stations_list:
+            nombre = str(s.get("UniqueStationName", "")).lower()
+            nombre_nbt = str(s.get("station_name_numbat", "")).lower()
+            asc = str(s.get("ASC", "")).lower()
+            nlc = str(s.get("NLC", ""))
+
+            if nombre == estacion_nombre.lower() or nombre_nbt == estacion_nombre.lower():
+                lookup_item = s
+                break
+            if estacion_nombre.lower() in nombre or estacion_nombre.lower() in nombre_nbt:
+                posibilidades.append(s.get("UniqueStationName", s.get("station_name_numbat", "")))
+            if estacion_nombre == asc or estacion_nombre == nlc:
+                lookup_item = s
+                break
 
     if lookup_item is None:
         if posibilidades:
@@ -251,13 +259,13 @@ def listar_estaciones() -> list[dict]:
             "latitud": s.get("Latitude"),
             "longitud": s.get("Longitude"),
         }
-        for s in _stations_lookup
+        for s in _stations_list
     ]
 
 
 def detalle_estacion(nlc_o_nombre: str) -> dict | None:
     _cargar_lookup()
-    for s in _stations_lookup:
+    for s in _stations_list:
         if str(s.get("NLC")) == nlc_o_nombre or \
            str(s.get("UniqueStationName", "")).lower() == nlc_o_nombre.lower() or \
            str(s.get("station_name_numbat", "")).lower() == nlc_o_nombre.lower():

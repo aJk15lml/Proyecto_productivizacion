@@ -119,15 +119,17 @@
 
     <div class="endpoint-group">
       <span class="label"><span class="method post">POST</span> /crowding</span>
-      <div class="json-box" id="post-body">{
+      <textarea id="post-body" style="width:100%;min-height:100px;padding:10px;border:1.5px solid #d0d5dd;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;resize:vertical;">{
   "estaciones": [
     {"estacion": "Oxford Circus", "dia": "TWT", "hora": 8},
     {"estacion": "Waterloo", "dia": "FRI", "hora": 18}
   ]
-}</div>
-      <div>
+}</textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
         <button class="btn-sm2" onclick="sendPostCrowding()">Enviar POST</button>
-        <button class="btn-sm2" onclick="navigator.clipboard.writeText(document.getElementById('post-body').textContent);alert('Copiado')">Copiar JSON</button>
+        <button class="btn-sm2" onclick="document.getElementById('file-input').click()">Subir archivo .json</button>
+        <input type="file" id="file-input" accept=".json" style="display:none" onchange="loadJsonFile(event)">
+        <button class="btn-sm2" onclick="document.getElementById('post-body').value=document.getElementById('post-body').defaultValue">Restaurar ejemplo</button>
       </div>
     </div>
   </div>
@@ -251,9 +253,9 @@ async function sendPostCrowding() {
   const bodyEl = document.getElementById("post-body");
   let payload;
   try {
-    payload = JSON.parse(bodyEl.textContent);
-  } catch {
-    alert("JSON inválido en el recuadro");
+    payload = JSON.parse(bodyEl.value);
+  } catch (e) {
+    alert("JSON inválido: " + e.message);
     return;
   }
   document.getElementById("loading").style.display = "block";
@@ -271,8 +273,21 @@ async function sendPostCrowding() {
     res.innerHTML = "<h2>POST /crowding</h2><div class='json-box'>" + JSON.stringify(data, null, 2) + "</div>";
   } catch (e) {
     document.getElementById("loading").style.display = "none";
-    showError("Error POST: " + e.message);
+    showError("Error POST: " + (e.message.includes("unexpected character")
+      ? "El servidor no respondió con JSON (posible cold start). Reintenta en unos segundos."
+      : e.message));
   }
+}
+
+function loadJsonFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById("post-body").value = e.target.result;
+  };
+  reader.readAsText(file);
+  event.target.value = ""; // permitir re-subir el mismo archivo
 }
 
 loadStations();

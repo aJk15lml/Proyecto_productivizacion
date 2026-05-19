@@ -1,5 +1,5 @@
 """
-Devi Crowding API — Flask backend para prediccion de aglomeracion
+London Crowding API — Flask backend para prediccion de aglomeracion
 en estaciones del Metro de Londres (NUMBAT dataset + XGBoost).
 
 Rutas:
@@ -47,7 +47,7 @@ def health():
     from .predictor import _modelo
     return jsonify({
         "status": "ok",
-        "servicio": "Devi Crowding API",
+        "servicio": "London Crowding API",
         "modelo_cargado": _modelo is not None,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
