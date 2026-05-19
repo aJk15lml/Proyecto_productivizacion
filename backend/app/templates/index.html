@@ -139,7 +139,21 @@
       <button class="btn-sm" onclick="document.getElementById('post-body').value=document.getElementById('post-body').defaultValue">Restaurar ejemplo</button>
     </div>
   </div>
-</div>
+  </div>
+
+  <div class="api-playground" style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
+    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:12px;">API Playground — pruebas rápidas</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">
+      <button class="btn-sm" onclick="window.open('/health','_blank')">GET /health</button>
+      <button class="btn-sm" onclick="window.open('/health/api','_blank')">/health/api</button>
+      <button class="btn-sm" onclick="window.open('/health/modelo','_blank')">/health/modelo</button>
+      <button class="btn-sm" onclick="window.open('/health/database','_blank')">/health/database</button>
+      <button class="btn-sm" onclick="window.open('/stations','_blank')">GET /stations</button>
+      <button class="btn-sm" onclick="openStationDetail()">GET /stations/{NLC}</button>
+      <button class="btn-sm" onclick="openCrowdingQuery()">GET /crowding?estacion=…</button>
+      <button class="btn-sm" onclick="openCrowdingPath()">GET /crowding/{nombre}</button>
+    </div>
+  </div>
 
 <div class="footer">
   <a href="https://github.com/aJk15lml/Proyecto_productivizacion/tree/dev" target="_blank">GitHub</a>
