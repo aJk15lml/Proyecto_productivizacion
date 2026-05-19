@@ -1,0 +1,14 @@
+.venv
+venv
+env
+__pycache__
+*.pyc
+.env
+.git
+.gitignore
+*.md
+data/raw/
+data/external/
+notebooks/
+docs/
+src/
