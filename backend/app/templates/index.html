@@ -142,7 +142,7 @@
   </div>
 
   <div class="api-playground" style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:20px;">
-    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:12px;">API Playground — pruebas rápidas</h3>
+    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:12px;">API Playground</h3>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">
       <button class="btn-sm" onclick="window.open('/health','_blank')">GET /health</button>
       <button class="btn-sm" onclick="window.open('/health/api','_blank')">/health/api</button>
@@ -301,6 +301,26 @@ function showError(msg) {
   const el = document.getElementById("error");
   el.innerHTML = msg + ' <button onclick="document.getElementById(\'predict-btn\').click()" style="margin-left:8px;padding:4px 12px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;">Reintentar</button>';
   el.style.display = "block";
+}
+
+function openCrowdingQuery() {
+  const sel = document.getElementById("station");
+  const dia = document.getElementById("day").value;
+  const hora = slider.value;
+  const nombre = sel.value ? (stations.find(s => s.NLC == sel.value)?.nombre || "Oxford Circus") : "Oxford Circus";
+  window.open("/crowding?estacion=" + encodeURIComponent(nombre) + "&dia=" + dia + "&hora=" + hora, "_blank");
+}
+
+function openCrowdingPath() {
+  const sel = document.getElementById("station");
+  const nombre = sel.value ? (stations.find(s => s.NLC == sel.value)?.nombre || "Oxford Circus") : "Oxford Circus";
+  window.open("/crowding/" + encodeURIComponent(nombre), "_blank");
+}
+
+function openStationDetail() {
+  const sel = document.getElementById("station");
+  const nlc = sel.value || "502";
+  window.open("/stations/" + nlc, "_blank");
 }
 
 // ---- Predecir multiples (POST con tabla + menos saturada) ----
