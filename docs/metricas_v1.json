@@ -18,7 +18,7 @@
   "nocturno_mape_no_cero": 0.5198264594574136,
   "nocturno_mape_n": 10534,
   "best_iteration": 305,
-  "secs_entrenamiento": 6.5,
+  "secs_entrenamiento": 3.9,
   "n_features": 12,
   "n_train_total": 207360,
   "n_test": 207360,

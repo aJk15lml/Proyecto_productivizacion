@@ -240,6 +240,32 @@ def main() -> int:
         json.dump(metricas, f, indent=2, ensure_ascii=False)
     print(f"Metricas         -> {RUTA_METRICAS}")
 
+    # ---- Construir auxiliares para que la API sea autosuficiente ----
+    # 1) Lista ordenada de NLCs vistos en entrenamiento (para pd.Categorical).
+    nlc_categories = sorted(df["NLC"].cat.categories.tolist()) if hasattr(df["NLC"], "cat") else sorted(df["NLC"].unique().tolist())
+
+    # 2) Metadata por estacion (1 fila por NLC) -> dict {NLC: {nombre, lineas, ...}}
+    cols_meta = ["UniqueStationName", "ASC", "InnerFareZone", "OuterFareZone",
+                 "Latitude", "Longitude", "num_lines", "num_modes",
+                 "tiene_modo_tfl_explicito", "FullyGated", "Hub"]
+    cols_meta = [c for c in cols_meta if c in df.columns]
+    df_meta = df.drop_duplicates(subset="NLC").copy()
+    df_meta["NLC_int"] = df_meta["NLC"].astype(int)
+    station_metadata = {int(r["NLC_int"]): {c: (r[c] if c not in ("InnerFareZone","OuterFareZone","num_lines","num_modes","tiene_modo_tfl_explicito") else int(r[c])) for c in cols_meta} for _, r in df_meta.iterrows()}
+
+    # 3) Percentiles diurnos por estacion para discretizar Bajo/Medio/Alto/Saturado
+    df_d = df[df["is_night"] == 0].copy()
+    df_d["NLC_int"] = df_d["NLC"].astype(int)
+    q = df_d.groupby("NLC_int", observed=True)["passengers"].quantile([0.25, 0.5, 0.75]).unstack()
+    q.columns = ["p25", "p50", "p75"]
+    percentiles_por_estacion = {int(nlc): {"p25": float(row.p25), "p50": float(row.p50), "p75": float(row.p75)}
+                                 for nlc, row in q.iterrows()}
+
+    print(f"\nAuxiliares construidos:")
+    print(f"  NLC categories: {len(nlc_categories)}")
+    print(f"  Station metadata: {len(station_metadata)} estaciones")
+    print(f"  Percentiles por estacion: {len(percentiles_por_estacion)} estaciones")
+
     # Re-entrenamiento con 2023 + 2024 para produccion
     print(f"\n=== Re-entrenando para produccion (2023 + 2024) ===")
     X_full = df[FEATURES]
@@ -256,6 +282,9 @@ def main() -> int:
 
     blob_prod = {
         "model": modelo_prod,
+        "nlc_categories": nlc_categories,
+        "station_metadata": station_metadata,
+        "percentiles_por_estacion": percentiles_por_estacion,
         "features": FEATURES,
         "features_categoricas": FEATURES_CAT,
         "features_numericas": FEATURES_NUM,

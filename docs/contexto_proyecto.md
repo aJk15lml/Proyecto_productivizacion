@@ -610,4 +610,91 @@ flask-cors==4.0.1
 
 ---
 
+## Patch v1.1 — Modelo autosuficiente (lado de datos/modelo)
+
+Tras el primer despliegue se detectaron dos problemas que se han resuelto desde el lado del modelo, dejándole a la API el mínimo trabajo posible. Estos cambios están en `main` desde el commit que añade `src/inferencia.py` y enriquece `src/entrenamiento.py`.
+
+### Cambios al blob `xgboost_prod.pkl`
+
+El blob ahora incluye tres campos adicionales que **eliminan la necesidad de leer el parquet en producción**:
+
+- `nlc_categories`: lista ordenada de los 432 NLCs vistos en entrenamiento. **Imprescindible** para que `pd.Categorical(fila["NLC"], categories=nlc_categories)` produzca los mismos códigos que XGBoost vio en training. Sin esto, predicciones para hubs eran 10× más bajas que lo real (caso Waterloo: 238 vs 2475 esperado).
+- `station_metadata`: dict `{NLC: {UniqueStationName, ASC, InnerFareZone, OuterFareZone, Latitude, Longitude, num_lines, num_modes, tiene_modo_tfl_explicito, FullyGated, Hub}}` para las 432 estaciones. Sustituye al lookup contra el parquet.
+- `percentiles_por_estacion`: dict `{NLC: {p25, p50, p75}}` calculado **sobre franjas diurnas únicamente**. Permite discretizar `Bajo/Medio/Alto/Saturado` **relativo a cada estación**, no globalmente.
+
+### Módulo nuevo: `src/inferencia.py`
+
+Función única `predecir(blob, estacion, dia, hora)` que hace todo el pipeline end-to-end:
+
+1. Busca el NLC por nombre, ASC o entero, con matching parcial.
+2. Calcula `is_peak` y `is_night` a partir de hora y day_type.
+3. Construye la fila de 12 features tirando de `station_metadata`.
+4. Castea `NLC` y `day_type` como `pd.Categorical` con las listas explícitas del blob.
+5. Llama `modelo.predict()`, deshace `log1p` y aplica `clip(0, None)`.
+6. Discretiza usando `percentiles_por_estacion[NLC]`.
+7. Devuelve dict listo para JSON.
+
+También hay `listar_estaciones(blob)` para alimentar el endpoint `/stations` sin tocar el parquet.
+
+### Implicaciones para `backend/app/predictor.py`
+
+El predictor actual de Pablo se puede simplificar drásticamente. Versión recomendada:
+
+```python
+import joblib
+from inferencia import predecir, listar_estaciones
+
+_BLOB = joblib.load("models/xgboost_prod.pkl")   # una sola vez al arrancar
+
+def predecir_estacion(estacion, dia="TWT", hora=12):
+    return predecir(_BLOB, estacion, dia, hora)
+
+def todas_las_estaciones():
+    return listar_estaciones(_BLOB)
+```
+
+**Para que funcione en Render:** `src/inferencia.py` debe estar accesible desde el `backend/` (que es el Root Directory configurado). La opción más simple es copiar el archivo a `backend/app/inferencia.py`.
+
+### Bugs originales — estado actualizado
+
+| Bug original | Estado |
+|--------------|--------|
+| Discretización con percentiles globales | **Resuelto desde el modelo.** `inferencia.py` usa `percentiles_por_estacion` por NLC. Pablo solo tiene que usar la función nueva. |
+| `NLC` casteado a `category` sin categorías explícitas | **Resuelto desde el modelo.** `inferencia.py` pasa `categories=nlc_categories` automáticamente. |
+| Búsqueda de estación sensible a formato | **Mejorado.** `inferencia.py` hace match exacto + parcial + por ASC y NLC numérico. |
+| Memory limit con 2 workers | Sin cambios. Mantener `--workers 1`. |
+| Cold start | Sin cambios. Sugerencia: UptimeRobot antes de la defensa. |
+| Score ad-hoc (`pasajeros / 6000`) | El campo `score` desaparece de la respuesta nueva. Se sustituye por `nivel_aglomeracion` con semántica clara. |
+
+### Cómo regenerar el `.pkl`
+
+```bash
+python src/entrenamiento.py     # ~5 segundos
+git add models/ src/inferencia.py src/entrenamiento.py
+git commit -m "Patch v1.1: blob autosuficiente + módulo de inferencia"
+git push
+```
+
+Render redesplegará al detectar el push.
+
+### Test esperado tras el patch
+
+| Caso | Antes (bug) | Después |
+|------|-------------|---------|
+| Waterloo LU, TWT, 09:00 | 238.5, "Saturado" (ambos mal) | ~2.475, "Alto" o "Saturado" (relativo a Waterloo, correcto) |
+| Dollis Hill, TWT, 12:00 | 87.6, "Alto" (etiqueta global, casualmente correcta) | ~87, "Alto" (relativo a Dollis Hill, legítimamente correcto) |
+| Oxford Circus, TWT, 18:00 | ~700, "Saturado" (sobreetiquetado por umbral global) | ~700, "Alto" o "Saturado" según percentil de Oxford Circus |
+
+---
+
 ## Decisiones pendientes (actualizado)
+
+Tras el patch v1.1, las decisiones pendientes que quedan abiertas son:
+
+- **Quantile regression para devolver intervalos de predicción.** En lugar de "238 pasajeros", devolver "238 (rango 180–310)". Entrenar tres modelos con `objective='reg:quantileerror'` para P10/P50/P90 y exponerlo en el JSON de respuesta. Coste estimado: 2 horas. Beneficio: aborda elegantemente el sesgo de infrapredicción en hubs extremos identificado en el notebook 03.
+- **Integración de clima (Open-Meteo).** Añadir lluvia y temperatura como features. La API de Open-Meteo es gratuita y sin key. Coste: 1-2 horas. Reentrenamiento del modelo necesario.
+- **UK bank holidays como feature.** Trivial de añadir (lista pública con ~10 días/año). Coste: 30 minutos. Reentrenamiento necesario.
+- **Keep-alive externo** (UptimeRobot o similar) **activado horas antes de la defensa** para eliminar el cold start del free tier de Render.
+- **Vídeo de respaldo grabado** de la demo, por si la URL pública falla durante la presentación.
+- **Análisis OSI (complejos de transbordo)** como feature de Nivel 4 — agregar predicciones de Bank + Monument como un solo nodo. No bloquea el MVP.
+
