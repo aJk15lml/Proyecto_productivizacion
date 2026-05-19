@@ -111,12 +111,14 @@ def calcular_metricas(y_real: np.ndarray, y_pred: np.ndarray, prefijo: str = "")
         f"{prefijo}rmse": float(np.sqrt(mean_squared_error(y_real, y_pred))),
         f"{prefijo}r2": float(r2_score(y_real, y_pred)) if len(y_real) > 1 else None,
     }
-    mask_no_cero = y_real > 0
+    mask_no_cero = y_real > 1.0   # filtrar valores diminutos del modelo NUMBAT (0.001 etc.) que explotan el MAPE
     if mask_no_cero.any():
         mape = np.mean(np.abs(y_real[mask_no_cero] - y_pred[mask_no_cero]) / y_real[mask_no_cero])
         metr[f"{prefijo}mape_no_cero"] = float(mape)
+        metr[f"{prefijo}mape_n"] = int(mask_no_cero.sum())
     else:
         metr[f"{prefijo}mape_no_cero"] = None
+        metr[f"{prefijo}mape_n"] = 0
     return metr
 
 
