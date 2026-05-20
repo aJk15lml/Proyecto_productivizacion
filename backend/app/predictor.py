@@ -16,18 +16,18 @@ import joblib
 import numpy as np
 import pandas as pd
 
-# ---------------------------------------------------------------------------
+
 # Rutas (configurables por variable de entorno)
-# ---------------------------------------------------------------------------
+
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
 MODEL_DIR = os.getenv("MODEL_DIR", str(RAIZ / "models"))
 RUTA_MODELO = os.getenv("RUTA_MODELO", os.path.join(MODEL_DIR, "xgboost_prod.pkl"))
 RUTA_PARQUET = os.getenv("RUTA_PARQUET", str(RAIZ / "data" / "processed" / "numbat_long.parquet"))
 
-# ---------------------------------------------------------------------------
+
 # Estado global (carga perezosa)
-# ---------------------------------------------------------------------------
+
 
 _modelo = None
 _features = None
@@ -43,9 +43,9 @@ _stations_list = None
 _station_percentiles = None  # dict: NLC -> {"p25": ..., "p50": ..., "p75": ...}
 
 
-# ---------------------------------------------------------------------------
+
 # Carga
-# ---------------------------------------------------------------------------
+
 
 def _cargar_modelo():
     global _modelo, _features, _features_cat, _day_types
@@ -109,9 +109,9 @@ def _cargar_lookup():
     gc.collect()
 
 
-# ---------------------------------------------------------------------------
+
 # Logica de negocio
-# ---------------------------------------------------------------------------
+
 
 MAPEO_DIA = {
     "MON": "lunes", "TWT": "martes-miercoles-jueves", "FRI": "viernes",

@@ -156,7 +156,7 @@
   </div>
 
 <div class="footer">
-  <a href="https://github.com/aJk15lml/Proyecto_productivizacion/tree/dev" target="_blank">GitHub</a>
+  <a href="https://github.com/aJk15lml/Proyecto_productivizacion/" target="_blank">GitHub</a>
 </div>
 
 <script>
@@ -166,21 +166,21 @@ let _minuto = 0;
 let _favorites = JSON.parse(localStorage.getItem("favStations") || "[]");
 const STORAGE_KEY = "favStations";
 
-// ---- Slider hora ----
+//  Slider hora 
 const slider = document.getElementById("hour-slider");
 const disp = document.getElementById("hour-display");
 slider.addEventListener("input", () => {
   disp.innerHTML = slider.value + '<span class="min">h</span>';
 });
 
-// ---- Minutos ----
+//  Minutos 
 function setMinute(m) {
   _minuto = m;
   document.querySelectorAll(".minute-btn").forEach(b =>
     b.classList.toggle("active", parseInt(b.dataset.min) === m));
 }
 
-// ---- Favoritos ----
+//  Favoritos 
 function saveFavs() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(_favorites));
   renderFavs();
@@ -226,7 +226,7 @@ function removeFav(nlc) {
   updateFavBtn();
 }
 
-// ---- API ----
+//  API 
 async function apiFetch(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55000);
@@ -238,7 +238,7 @@ async function apiFetch(url) {
   return r.json();
 }
 
-// ---- Cargar estaciones ----
+//  Cargar estaciones 
 async function loadStations() {
   const sel = document.getElementById("station");
   const loadEl = document.getElementById("station-loading");
@@ -261,7 +261,7 @@ async function loadStations() {
 
 document.getElementById("station").addEventListener("change", updateFavBtn);
 
-// ---- Predecir individual ----
+//  Predecir individual 
 document.getElementById("predict-btn").addEventListener("click", async () => {
   const nlc = document.getElementById("station").value;
   const dia = document.getElementById("day").value;
@@ -323,7 +323,7 @@ function openStationDetail() {
   window.open("/stations/" + nlc, "_blank");
 }
 
-// ---- Predecir multiples (POST con tabla + menos saturada) ----
+//  Predecir multiples (POST con tabla + menos saturada) 
 async function sendPostCrowding() {
   let payload;
   try { payload = JSON.parse(document.getElementById("post-body").value); }
@@ -379,7 +379,7 @@ async function sendPostCrowding() {
   }
 }
 
-// ---- File upload ----
+//  File upload 
 function loadJsonFile(event) {
   const file = event.target.files[0];
   if (!file) return;
